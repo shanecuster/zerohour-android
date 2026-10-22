@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Text the app shows that lives outside the code, so it can be changed (or
+  translated) without touching Kotlin. For now there is just the app's name,
+  which appears under the launcher icon.
+-->
+<resources>
+    <string name="app_name">zerohour</string>
+</resources>
