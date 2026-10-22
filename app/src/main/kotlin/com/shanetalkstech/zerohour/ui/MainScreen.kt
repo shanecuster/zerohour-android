@@ -108,13 +108,16 @@ private data class OpenForm(val form: ItemForm, val adding: Boolean)
 /** A line swiped left, waiting for "delete" or "keep": its [id] and [title]. */
 private data class PendingDelete(val id: String, val title: String)
 
-/** Which full page is showing: the main screen with its tabs, or settings. */
+/** Which full page is showing: the main screen with its tabs, settings or sync. */
 private enum class Page {
     /** The main screen (header, the chosen tab, the tab bar). */
     MAIN,
 
     /** The settings page, opened with the gear in the header. */
     SETTINGS,
+
+    /** The sync page, opened from "Sync ›" on the settings page. */
+    SYNC,
 }
 
 /**
@@ -272,9 +275,12 @@ fun MainRoute() {
                         // Read everything again, so a new theme, icon set,
                         // time format or database shows at once.
                         onChanged = { reloads++ },
-                        onOpenSync = {},
+                        onOpenSync = { page = Page.SYNC },
                         onClose = { page = Page.MAIN },
                     )
+                } else if (page == Page.SYNC) {
+                    // Closing goes back to the settings page it came from.
+                    SyncPage(look = look, onClose = { page = Page.SETTINGS })
                 } else {
                     MainScreenContent(
                         look = look,
