@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What Android may copy out of the app on Android 12 and later: nothing.
+
+  `allowBackup="false"` in the manifest stops cloud backups and `adb backup`,
+  but on Android 12+ it does NOT stop a *device-to-device transfer* (the
+  "copy apps and data" step when setting up a new phone). These rules close
+  that gap: every storage area the app has is excluded, both from cloud
+  backups and from device transfers.
+
+  Why: the database holds the tasks, events and the sync state (which
+  versions the server has), and the encrypted sync password sits in the
+  app's files. Copied to another phone, the sync state would describe a
+  different device, and the password could not be decrypted there anyway
+  (the Android Keystore key never leaves the phone it was made on).
+
+  `path="."` means "everything in this area". The `device_` areas are the
+  storage Android keeps readable before the phone is first unlocked.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

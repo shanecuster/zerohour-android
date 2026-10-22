@@ -24,8 +24,11 @@ app and pinned to one commit.
   so both apps look and behave the same.
 - **Privacy:** the only permission is `INTERNET` (a later version adds the
   permissions reminders need). Everything is stored on the device. Syncing to
-  your own CouchDB server is optional, off by default, and `https://` only. The
-  full policy is in [PRIVACY.md](PRIVACY.md).
+  your own CouchDB server is optional, off by default, and `https://` only.
+  The server needs a certificate from a public certificate authority (such as
+  Let's Encrypt): the app checks it against Mozilla's list built into the app,
+  so self-signed and private-CA servers are not supported. The full policy is
+  in [PRIVACY.md](PRIVACY.md).
 
 ## Building
 

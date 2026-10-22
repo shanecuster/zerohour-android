@@ -19,11 +19,24 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.Zerohour"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="false"
         android:supportsRtl="true">
         <!--
           allowBackup="false": do not copy the app's private data into Google's
-          cloud backups. Tasks, events and the encrypted sync password stay on
-          the device unless the user turns on sync to their own server.
+          cloud backups (or out with `adb backup`). Tasks, events and the
+          encrypted sync password stay on the device unless the user turns on
+          sync to their own server.
+
+          dataExtractionRules: on Android 12 and later, allowBackup="false"
+          alone still lets a new phone copy the app's data during setup
+          (device-to-device transfer). The rules file excludes everything from
+          that too. Older Android versions only read allowBackup.
+
+          usesCleartextTraffic="false": no plain http:// from Android's own
+          network code. Sync runs in Rust with its own connections, which this
+          setting cannot see, so the Rust side refuses non-https addresses
+          itself; this is a second guard.
 
           No android:icon yet: Android supplies a default launcher icon. The
           real icon is part of release preparation (the last plan step).
