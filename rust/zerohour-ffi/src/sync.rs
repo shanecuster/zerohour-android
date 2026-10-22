@@ -31,6 +31,7 @@ use std::sync::atomic::Ordering;
 
 use chrono::{DateTime, Local, NaiveDate, TimeZone, Utc};
 use zerohour_core::clock::{TimeFormat as CoreTimeFormat, format_time, format_time_short};
+use zerohour_core::icons::Icon;
 use zerohour_core::sync::{self, SyncError, SyncSettings};
 
 use crate::database::{Database, StoredSettings, parse_now};
@@ -120,6 +121,23 @@ pub struct SyncStatus {
     /// first sync adds them to the server's, and anything typed on both
     /// devices will appear twice, so the app asks first.
     pub first_sync_warning: bool,
+    /// The header indicator's icons in the chosen icon mode, from core's
+    /// icon table: never synced or syncing ("⇅" in Unicode mode), synced,
+    /// offline ("○") and error ("✗").
+    pub icons: SyncIcons,
+}
+
+/// The four sync icons, in the chosen icon mode.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct SyncIcons {
+    /// Never synced, and while syncing.
+    pub sync: String,
+    /// The last sync worked.
+    pub synced: String,
+    /// The server could not be reached.
+    pub offline: String,
+    /// The last sync failed.
+    pub error: String,
 }
 
 /// What one "Sync now" did, for the messages after it.
@@ -309,7 +327,9 @@ impl Database {
         let today = parse_now(&now)?.local.date();
         let db = self.lock()?;
         let settings = SyncSettings::load(&db)?;
-        let format = StoredSettings::load(&db)?.time_format;
+        let stored = StoredSettings::load(&db)?;
+        let format = stored.time_format;
+        let mode = stored.icon_mode;
         let local_items = count(db.list_items()?.len());
         let last = sync::last_synced(&db)?;
         let (short, long) = match last {
@@ -327,6 +347,12 @@ impl Database {
             synced_docs: db.synced_doc_count()?,
             local_items,
             first_sync_warning: last.is_none() && local_items > 0,
+            icons: SyncIcons {
+                sync: Icon::Sync.get(mode).to_string(),
+                synced: Icon::Synced.get(mode).to_string(),
+                offline: Icon::Offline.get(mode).to_string(),
+                error: Icon::SyncError.get(mode).to_string(),
+            },
         })
     }
 
@@ -573,6 +599,9 @@ mod tests {
         assert_eq!(status.last_synced_long, None);
         assert_eq!(status.local_items, 0);
         assert!(!status.first_sync_warning);
+        // A fresh database draws Nerd Font icons; each one is different.
+        let i = &status.icons;
+        assert!(i.sync != i.synced && i.offline != i.error && i.sync != i.error);
         // Switched on, the indicator shows.
         db.save_sync_settings(config("https://couch.example.invalid"))
             .unwrap();
