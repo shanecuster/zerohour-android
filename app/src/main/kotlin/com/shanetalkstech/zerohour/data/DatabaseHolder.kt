@@ -2,7 +2,7 @@ package com.shanetalkstech.zerohour.data
 
 import android.content.Context
 import com.shanetalkstech.zerohour.BuildConfig
-import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import uniffi.zerohour_ffi.Database
@@ -60,18 +60,22 @@ object DatabaseHolder {
 
 /**
  * The pattern for the "now" text the Rust side expects, e.g.
- * `2026-10-22T14:30:00`: the local date and time to the second, with no time
- * zone. It must match `NOW_FORMAT` in `rust/zerohour-ffi/src/database.rs`.
- * `'T'` in quotes is a literal letter T; `HH` is the 24-hour hour.
- * `Locale.ROOT` keeps the digits plain ASCII whatever the phone's language.
+ * `2026-10-22T14:30:00+02:00`: the local date and time to the second, plus
+ * the phone's offset from UTC. It must match `NOW_FORMAT` in
+ * `rust/zerohour-ffi/src/database.rs`. `'T'` in quotes is a literal letter T;
+ * `HH` is the 24-hour hour; `xxx` is the offset as `+02:00` (always digits,
+ * even `+00:00`, where `XXX` would write `Z`). `Locale.ROOT` keeps the digits
+ * plain ASCII whatever the phone's language.
  */
 private val NOW_FORMATTER: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
+    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxxx", Locale.ROOT)
 
 /**
- * The current local date and time as the text the Rust side expects.
+ * The current local date and time, with the UTC offset, as the text the Rust
+ * side expects. Rust needs both: wall-clock time for due dates and repeats,
+ * and the exact moment (UTC) for the timestamps it stores.
  *
  * The Rust core never reads the clock itself (so its tests can pretend it is
  * any moment); the app reads it here and passes it in.
  */
-fun nowText(): String = LocalDateTime.now().format(NOW_FORMATTER)
+fun nowText(): String = OffsetDateTime.now().format(NOW_FORMATTER)

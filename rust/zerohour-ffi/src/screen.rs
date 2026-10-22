@@ -99,6 +99,9 @@ pub struct TaskRow {
     pub id: String,
     /// The title as listed (repeating tasks end with the repeat icon).
     pub title: String,
+    /// The title exactly as typed, without the icon: for the delete box,
+    /// which asks `Delete "title"?` as the terminal app does.
+    pub plain_title: String,
     /// The title's colour: `Danger` when overdue, otherwise `Foreground`.
     pub title_slot: ColorSlot,
     /// The priority icon (up arrow, circle or down arrow in Nerd mode).
@@ -185,13 +188,13 @@ fn column_color(theme: &Theme, column: usize, width: usize) -> RgbColor {
 // gathers the methods from every block into the one Kotlin class.
 #[uniffi::export]
 impl Database {
-    /// Builds the main screen as of `now` (local time, see `NOW_FORMAT`).
+    /// Builds the main screen as of `now` (see `NOW_FORMAT`).
     ///
     /// `narrow` asks for the short texts ("3d" instead of "due in 3d"); Kotlin
     /// sets it when the screen is under 60 columns wide, the same limit as the
     /// terminal app, which in practice means a phone held upright.
     pub fn main_screen(&self, now: String, narrow: bool) -> Result<MainScreen, FfiError> {
-        let now = parse_now(&now)?;
+        let now = parse_now(&now)?.local;
         let today = now.date();
 
         // Read everything needed while holding the lock, then let it go (the
@@ -215,6 +218,7 @@ impl Database {
                 priority_name: task.priority.label().to_string(),
                 date_text: view::date_text(task.date, today),
                 due: view::due_label(&task, now, narrow, mode, settings.time_format).into(),
+                plain_title: task.title.clone(),
                 // The fields used above only borrowed `task`; these two move
                 // its strings out, so they come last.
                 id: task.id,
@@ -267,7 +271,7 @@ mod tests {
     use zerohour_core::theme::THEMES;
 
     /// A fixed "now" for the tests: Thu Oct 22 2026, 09:15.
-    const NOW: &str = "2026-10-22T09:15:00";
+    const NOW: &str = "2026-10-22T09:15:00+02:00";
 
     /// The demo database, seeded as of [`NOW`].
     fn demo() -> Arc<Database> {

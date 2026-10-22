@@ -40,7 +40,7 @@ import uniffi.zerohour_ffi.ColorSlot
  *   colour, so it "cuts" the line. Like the terminal app's titles, they start
  *   and end with a space so there is a gap on both sides.
  * - [paddingCells]: blank columns between the border and the content (the
- *   terminal app uses 1 for the Tasks and Events boxes, 0 for the outer frame).
+ *   terminal app uses 1 for the Tasks and Events boxes).
  * - [content]: what goes inside. `BoxScope.()` means it is placed inside a
  *   `Box`, so it can use `Modifier.align`.
  */

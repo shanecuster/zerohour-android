@@ -25,9 +25,14 @@
 //! * **The main screen** (`screen` module) -- `Database::main_screen` returns
 //!   the sorted Tasks and Events lines, their texts and colour slots, the
 //!   icons, the banner and the tagline, all decided by core.
+//! * **The add/edit form** (`form` module) -- an `ItemForm` object holding
+//!   core's `FormInput`: fields, choices, previews and the calendar picker.
+//! * **Changing items** (`items` module) -- `Database` methods to open a form,
+//!   save it, save the calendar's week start, complete a task and delete an
+//!   item.
 //! * **Errors** (`error` module) -- the one `FfiError` type Kotlin catches.
 //!
-//! Later steps add editing and sync. All the real logic lives in
+//! Later steps add stats and sync. All the real logic lives in
 //! `zerohour-core`; the functions here are thin.
 //!
 //! ## Why mirror types instead of exporting core's types directly?
@@ -47,6 +52,8 @@ uniffi::setup_scaffolding!();
 // exported types are part of this crate's public surface.
 pub mod database;
 pub mod error;
+pub mod form;
+pub mod items;
 pub mod screen;
 
 use zerohour_core::theme::{DEFAULT_THEME, Rgb, THEMES, Theme};

@@ -34,9 +34,26 @@
           launcher starts. The <intent-filter> says "this is the app's main
           entry point and should appear in the app drawer".
         -->
+        <!--
+          windowSoftInputMode="adjustResize": when the keyboard opens, the
+          screen shrinks to the space above it (instead of the keyboard
+          covering the add/edit form), so the field being typed in stays
+          visible.
+
+          configChanges: by default Android destroys and rebuilds the screen
+          when the phone is turned, which would throw away a half-filled
+          add/edit form. Listing these changes says "the app handles them
+          itself": the screen stays, and Compose simply lays it out again for
+          the new size (narrow or wide), keeping everything it remembers.
+          orientation and screenSize change on a turn; screenLayout and
+          keyboardHidden cover the shape of the screen and a hardware keyboard
+          being attached or removed.
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

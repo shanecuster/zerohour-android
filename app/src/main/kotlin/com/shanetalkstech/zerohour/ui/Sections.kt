@@ -1,15 +1,31 @@
 package com.shanetalkstech.zerohour.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,7 +36,9 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.IntOffset
 import com.shanetalkstech.zerohour.R
+import kotlin.math.roundToInt
 import uniffi.zerohour_ffi.ColorSlot
 import uniffi.zerohour_ffi.EventRow
 import uniffi.zerohour_ffi.TaskRow
@@ -57,6 +75,12 @@ private const val REPEAT_CELLS = 17
  * - [taskIcon]: the marker icon for the chosen icon mode.
  * - [narrow]: true on screens under 60 columns (short texts, fewer columns).
  * - [showDates]: true on screens 90 columns or wider (adds the date column).
+ * - [onEdit]: one tap on a line, with the task's ID (opens it for editing).
+ *   The marker in front of each line is only a picture of a checkbox:
+ *   tapping it edits too, it does not tick the task off.
+ * - [onComplete]: the line was swiped right (complete the task).
+ * - [onDelete]: the line was swiped left, with the ID and the plain title
+ *   (ask whether to delete it).
  * - [modifier]: decides the box's size (the caller shares the height out).
  */
 @Composable
@@ -66,6 +90,9 @@ fun TasksBox(
     taskIcon: String,
     narrow: Boolean,
     showDates: Boolean,
+    onEdit: (String) -> Unit,
+    onComplete: (String) -> Unit,
+    onDelete: (id: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val sectionColor = look.color(ColorSlot.TASK)
@@ -90,7 +117,12 @@ fun TasksBox(
             // which line is which, so lines keep their identity on refresh.
             LazyColumn {
                 items(tasks, key = { it.id }) { task ->
-                    ListLine(look) {
+                    SwipeLine(
+                        look = look,
+                        onTap = { onEdit(task.id) },
+                        onSwipeRight = { onComplete(task.id) },
+                        onSwipeLeft = { onDelete(task.id, task.plainTitle) },
+                    ) {
                         CellText(look, taskIcon, sectionColor, markerCells)
                         Gap(look)
                         CellText(look, task.priorityIcon, look.color(task.prioritySlot), priorityCells)
@@ -121,6 +153,8 @@ fun TasksBox(
 /**
  * The Events box: the visible events with their countdowns, already sorted
  * soonest first by core. The parameters mean the same as for [TasksBox].
+ * Swiping an event right is passed on too; the Rust side answers that events
+ * can't be completed, and the line springs back.
  */
 @Composable
 fun EventsBox(
@@ -129,6 +163,9 @@ fun EventsBox(
     eventIcon: String,
     narrow: Boolean,
     showDates: Boolean,
+    onEdit: (String) -> Unit,
+    onComplete: (String) -> Unit,
+    onDelete: (id: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val sectionColor = look.color(ColorSlot.EVENT)
@@ -149,7 +186,12 @@ fun EventsBox(
 
             LazyColumn {
                 items(events, key = { it.id }) { event ->
-                    ListLine(look) {
+                    SwipeLine(
+                        look = look,
+                        onTap = { onEdit(event.id) },
+                        onSwipeRight = { onComplete(event.id) },
+                        onSwipeLeft = { onDelete(event.id, event.title) },
+                    ) {
                         CellText(look, eventIcon, sectionColor, markerCells)
                         Gap(look)
                         TitleText(look, event.title, look.color(ColorSlot.FOREGROUND))
@@ -210,20 +252,127 @@ private fun sectionTitle(
     withStyle(SpanStyle(color = look.color(ColorSlot.MUTED))) { append("($count) ") }
 }
 
+/** Where a swiped line can come to rest. */
+private enum class SwipeAnchor {
+    /** Pushed off to the left: ask to delete. */
+    DELETE,
+
+    /** In place (the normal state). */
+    REST,
+
+    /** Pushed off to the right: complete. */
+    COMPLETE,
+}
+
+/**
+ * How far a line must be dragged before letting go swipes it: 40% of its
+ * width. Less springs back. A quick flick swipes it too, whatever the
+ * distance (Compose's own rule for anchored drags).
+ */
+private const val SWIPE_THRESHOLD = 0.4f
+
 /**
  * One list line: a row of cells, [LINE_ROWS] character rows tall, with its
- * contents centred vertically. `RowScope.()` lets the contents use
- * `Modifier.weight`, which [TitleText] needs.
+ * contents centred vertically.
+ *
+ * Touch, as the plan sets out: one tap runs [onTap]; dragging the line to
+ * the right and letting go runs [onSwipeRight], to the left [onSwipeLeft].
+ * Either way the line then slides back into place (if the action removes it,
+ * the next refresh does that). While it is dragged, the space it uncovers
+ * says what letting go will do: "done" on the left in the "ok" colour,
+ * "delete" on the right in the danger colour.
+ *
+ * The swipe uses Compose foundation's `AnchoredDraggable`: the line can rest
+ * at one of three positions (the [SwipeAnchor]s), follows the finger in
+ * between, and settles on the nearest sensible one when let go.
+ * `RowScope.()` lets the contents use `Modifier.weight`, which [TitleText]
+ * needs.
  */
 @Composable
-private fun ListLine(look: TuiLook, content: @Composable RowScope.() -> Unit) {
-    Row(
+private fun SwipeLine(
+    look: TuiLook,
+    onTap: () -> Unit,
+    onSwipeRight: () -> Unit,
+    onSwipeLeft: () -> Unit,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val state = remember { AnchoredDraggableState(initialValue = SwipeAnchor.REST) }
+
+    // When the line comes to rest off to one side, do that side's action and
+    // slide it back. `settledValue` changes only once a drag has finished.
+    LaunchedEffect(state.settledValue) {
+        when (state.settledValue) {
+            SwipeAnchor.COMPLETE -> onSwipeRight()
+            SwipeAnchor.DELETE -> onSwipeLeft()
+            SwipeAnchor.REST -> return@LaunchedEffect
+        }
+        state.animateTo(SwipeAnchor.REST)
+    }
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(look.cell.rows(LINE_ROWS)),
-        verticalAlignment = Alignment.CenterVertically,
-        content = content,
-    )
+    ) {
+        // The resting positions, in pixels: a whole line's width either side.
+        // They depend on the width, so they are set (again) after each layout.
+        val width = constraints.maxWidth.toFloat()
+        SideEffect {
+            state.updateAnchors(
+                DraggableAnchors {
+                    SwipeAnchor.DELETE at -width
+                    SwipeAnchor.REST at 0f
+                    SwipeAnchor.COMPLETE at width
+                },
+            )
+        }
+        // How far the line is dragged right now (0 before the first layout).
+        val dragged = if (state.offset.isNaN()) 0f else state.offset
+
+        // Underneath: what letting go will do.
+        if (dragged > 0f) {
+            SwipeHint(look, R.string.swipe_done, ColorSlot.OK, Alignment.CenterStart)
+        } else if (dragged < 0f) {
+            SwipeHint(look, R.string.swipe_delete, ColorSlot.DANGER, Alignment.CenterEnd)
+        }
+
+        // On top: the line itself, moved by the drag. It paints the theme
+        // background so the hint underneath only shows where it has moved
+        // away.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(look.cell.rows(LINE_ROWS))
+                .offset { IntOffset(dragged.roundToInt(), 0) }
+                .background(look.color(ColorSlot.BACKGROUND))
+                .anchoredDraggable(
+                    state = state,
+                    orientation = Orientation.Horizontal,
+                    flingBehavior = AnchoredDraggableDefaults.flingBehavior(
+                        state = state,
+                        positionalThreshold = { distance -> distance * SWIPE_THRESHOLD },
+                    ),
+                )
+                .clickable(onClick = onTap),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
+    }
+}
+
+/**
+ * The word shown in the space a dragged line uncovers, at one end of the
+ * line ([alignment]), bold in [slot]'s colour.
+ */
+@Composable
+private fun SwipeHint(look: TuiLook, text: Int, slot: ColorSlot, alignment: Alignment) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = alignment) {
+        BasicText(
+            text = stringResource(text),
+            style = look.text.copy(color = look.color(slot), fontWeight = FontWeight.Bold),
+            modifier = Modifier.padding(horizontal = look.cell.columns(1)),
+        )
+    }
 }
 
 /** One blank column between two columns, like the terminal app's column gap. */
