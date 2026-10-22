@@ -35,7 +35,7 @@ private const val BLANK = ' '
 /**
  * The big "zerohour" title and the tagline under it ("7 days to Christmas"),
  * centred, as at the top of the terminal app's main screen, with one blank
- * row above it so the letters do not touch the frame's top border.
+ * row above it so the letters do not touch the header row.
  *
  * Everything comes from the Rust side: the letters (half-block characters, or
  * plain ASCII in ASCII icon mode), one gradient colour per column, and the

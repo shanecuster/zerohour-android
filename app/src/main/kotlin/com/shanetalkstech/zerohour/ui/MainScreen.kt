@@ -7,10 +7,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.text.BasicText
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import com.shanetalkstech.zerohour.R
 import com.shanetalkstech.zerohour.data.DatabaseHolder
@@ -82,7 +85,7 @@ private sealed interface LoadState {
 }
 
 /**
- * A message in the bottom border of the main screen ("Added "Call mum"").
+ * A message in the bottom row of the main screen ("Added "Call mum"").
  * [isError] draws it in the danger colour instead of the "ok" colour, as in
  * the terminal app.
  */
@@ -98,8 +101,8 @@ private data class OpenForm(val form: ItemForm, val adding: Boolean)
 private data class PendingDelete(val id: String, val title: String)
 
 /**
- * The app's one route: the main screen (the frame with the app name and the
- * date, the banner and tagline, and the Tasks and Events boxes), or the
+ * The app's one route: the main screen (a row with the app name and the date,
+ * the banner and tagline, and the Tasks and Events boxes), or the
  * add/edit form in its place while one is open.
  *
  * It works out how many character columns and rows fit on the screen, asks the
@@ -108,7 +111,7 @@ private data class PendingDelete(val id: String, val title: String)
  * countdowns stay current while the app is open, and straight after anything
  * changes.
  *
- * Touch: "+ add" in the bottom border opens a new form; one tap on a line
+ * Touch: "+ add" in the bottom row opens a new form; one tap on a line
  * opens it for editing; swiping a line right completes it; swiping it left
  * asks whether to delete it.
  */
@@ -302,20 +305,25 @@ private fun millisUntilNextMinute(): Long {
  * The loaded main screen, laid out like the terminal app:
  *
  * ```
- * ╭ zerohour · demo ──── Thu Oct 22 2026 ╮
- * │      ▀▀█ █▀▀ █▀█ █▀█ █ █ ...         │
- * │        5 days to Lake trip           │
- * │╭ ☐ Tasks (8) ───────────────────────╮│
- * ││ ☐ ▲ Send project update      3h    ││
- * │╰────────────────────────────────────╯│
- * │╭ ◷ Events (5) ──────────────────────╮│
- * ││ ◷ Lake trip                  5d    ││
- * │╰────────────────────────────────────╯│
- * ╰─ Added "Call mum" ─────────── + add ─╯
+ *   zerohour · demo        Thu Oct 22 2026
+ *       ▀▀█ █▀▀ █▀█ █▀█ █ █ ...
+ *         5 days to Lake trip
+ * ╭ ☐ Tasks (8) ─────────────────────────╮
+ * │ ☐ ▲ Send project update      3h      │
+ * ╰──────────────────────────────────────╯
+ * ╭ ◷ Events (5) ────────────────────────╮
+ * │ ◷ Lake trip                  5d      │
+ * ╰──────────────────────────────────────╯
+ *   Added "Call mum"                + add
  * ```
  *
+ * Unlike the terminal app there is no frame around the whole screen: on a
+ * phone every column counts, so the Tasks and Events boxes run to the edges.
+ * The header and the bottom row keep their text where the frame's edges had
+ * it.
+ *
  * [columns] and [rows] are how many character cells fit on the screen.
- * [status] is the message for the bottom border, if any. [onAdd] runs when
+ * [status] is the message for the bottom row, if any. [onAdd] runs when
  * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID),
  * [onComplete] when one is swiped right, [onDelete] when one is swiped left
  * (with its ID and title).
@@ -334,84 +342,141 @@ private fun MainScreenContent(
     onDelete: (id: String, title: String) -> Unit,
 ) {
     val settings = screen.settings
-    // The banner needs: the setting on, room for its letters inside the frame
-    // with a column to spare on each side, and a tall enough screen.
+    // The banner needs: the setting on, room for its letters with a column
+    // to spare on each side, and a tall enough screen.
     val bannerShown = settings.showBanner &&
-        columns >= bannerColumns(screen.banner) + 4 &&
+        columns >= bannerColumns(screen.banner) + 2 &&
         rows >= BANNER_MIN_ROWS
     val bannerRows = if (bannerShown) bannerRows(screen.banner) else 0
 
-    TuiBox(
-        look = look,
-        borderColor = look.color(ColorSlot.BORDER),
-        modifier = Modifier.fillMaxSize(),
-        title = headerTitle(look, screen.demo),
-        rightTitle = AnnotatedString(
-            " ${screen.today} ",
-            SpanStyle(color = look.color(ColorSlot.MUTED)),
-        ),
-        bottomTitle = status?.let {
-            AnnotatedString(
-                " ${it.text} ",
-                SpanStyle(color = look.color(if (it.isError) ColorSlot.DANGER else ColorSlot.OK)),
-            )
-        },
-        bottomRightTitle = AnnotatedString(
-            stringResource(R.string.add_button),
-            SpanStyle(color = look.color(ColorSlot.ACCENT), fontWeight = FontWeight.Bold),
-        ),
-        onBottomRightClick = onAdd,
-        paddingCells = 0,
+    Column(modifier = Modifier.fillMaxSize()) {
+        HeaderRow(look, headerTitle(look, screen.demo), screen.today)
+        if (bannerShown) {
+            BannerView(look, screen.banner)
+        }
+
+        // How the two boxes share the height left over. `weight(1f)` means
+        // "a share of the free space"; two boxes with weight 1 get half
+        // each. In the "fit" layout the Events box is sized to its lines
+        // instead (but never more than half), and Tasks get the rest.
+        val eventsModifier = when (settings.layout) {
+            LayoutMode.SPLIT -> Modifier.weight(1f)
+            LayoutMode.FIT -> {
+                // Rows for the boxes: minus the header and the bottom row.
+                val freeRows = rows - 2 - bannerRows
+                val half = maxOf(freeRows / 2, 3)
+                Modifier.height(look.cell.rows(eventsBoxRows(screen.events.size).coerceIn(3, half)))
+            }
+        }
+
+        TasksBox(
+            look = look,
+            tasks = screen.tasks,
+            taskIcon = screen.taskIcon,
+            narrow = narrow,
+            showDates = columns >= DATE_COLUMNS,
+            onEdit = onEdit,
+            onComplete = onComplete,
+            onDelete = onDelete,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        )
+        EventsBox(
+            look = look,
+            events = screen.events,
+            eventIcon = screen.eventIcon,
+            narrow = narrow,
+            showDates = columns >= DATE_COLUMNS,
+            onEdit = onEdit,
+            onComplete = onComplete,
+            onDelete = onDelete,
+            modifier = eventsModifier.fillMaxWidth(),
+        )
+        // Last, so its enlarged "+ add" tap area is drawn on top of (and wins
+        // over) the Events box's bottom line.
+        FooterRow(
+            look = look,
+            message = status?.let {
+                AnnotatedString(
+                    it.text,
+                    SpanStyle(color = look.color(if (it.isError) ColorSlot.DANGER else ColorSlot.OK)),
+                )
+            },
+            onAdd = onAdd,
+        )
+    }
+}
+
+/**
+ * The top row of the main screen: [title] on the left and [today]'s date,
+ * muted, on the right, one column in from each edge (where the terminal app's
+ * frame sets them into its top border).
+ */
+@Composable
+private fun HeaderRow(look: TuiLook, title: AnnotatedString, today: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = look.cell.columns(1)),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            if (bannerShown) {
-                BannerView(look, screen.banner)
-            }
+        // `weight(1f)` gives the title whatever the date leaves, so on a very
+        // narrow screen the title is cut, never the date.
+        BasicText(
+            text = title,
+            style = look.text,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier.weight(1f),
+        )
+        BasicText(
+            text = " $today ",
+            style = look.text.copy(color = look.color(ColorSlot.MUTED)),
+            maxLines = 1,
+        )
+    }
+}
 
-            // How the two boxes share the height left over. `weight(1f)` means
-            // "a share of the free space"; two boxes with weight 1 get half
-            // each. In the "fit" layout the Events box is sized to its lines
-            // instead (but never more than half), and Tasks get the rest.
-            val eventsModifier = when (settings.layout) {
-                LayoutMode.SPLIT -> Modifier.weight(1f)
-                LayoutMode.FIT -> {
-                    // Rows inside the frame: minus its top and bottom border.
-                    val freeRows = rows - 2 - bannerRows
-                    val half = maxOf(freeRows / 2, 3)
-                    Modifier.height(look.cell.rows(eventsBoxRows(screen.events.size).coerceIn(3, half)))
-                }
-            }
-
-            TasksBox(
-                look = look,
-                tasks = screen.tasks,
-                taskIcon = screen.taskIcon,
-                narrow = narrow,
-                showDates = columns >= DATE_COLUMNS,
-                onEdit = onEdit,
-                onComplete = onComplete,
-                onDelete = onDelete,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            )
-            EventsBox(
-                look = look,
-                events = screen.events,
-                eventIcon = screen.eventIcon,
-                narrow = narrow,
-                showDates = columns >= DATE_COLUMNS,
-                onEdit = onEdit,
-                onComplete = onComplete,
-                onDelete = onDelete,
-                modifier = eventsModifier.fillMaxWidth(),
+/**
+ * The bottom row of the main screen: [message] on the left (it ends in "…"
+ * if it is too long), and the tappable "+ add" on the right, which runs
+ * [onAdd]. Both sit one column in from the edges, where the terminal app's
+ * frame shows them in its bottom border.
+ */
+@Composable
+private fun FooterRow(look: TuiLook, message: AnnotatedString?, onAdd: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = look.cell.columns(1)),
+    ) {
+        // The message gets the width "+ add" leaves, less one blank column
+        // between them. The leading space matches the header's title.
+        BasicText(
+            text = message?.let { AnnotatedString(" ") + it } ?: AnnotatedString(""),
+            style = look.text,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = look.cell.columns(1)),
+        )
+        // One text row is too short for a finger: the tap area is made at
+        // least 48dp each way, the text stays where it is.
+        LargeTapArea(onClick = onAdd) {
+            BasicText(
+                text = stringResource(R.string.add_button),
+                style = look.text.copy(color = look.color(ColorSlot.ACCENT), fontWeight = FontWeight.Bold),
+                maxLines = 1,
             )
         }
     }
 }
 
 /**
- * The frame's title, " zerohour · demo ": the app name in the accent colour,
+ * The header's title, " zerohour · demo ": the app name in the accent colour,
  * bold, and " · demo" muted when the demo database is showing.
  */
 @Composable

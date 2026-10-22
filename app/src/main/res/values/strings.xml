@@ -27,7 +27,7 @@
       rather than in core, so the phone's copy lives here. Field labels,
       previews and validation messages DO come from core.
     -->
-    <!-- In the bottom border of the main screen; tapping it adds an item. -->
+    <!-- In the bottom row of the main screen; tapping it adds an item. -->
     <string name="add_button">" + add "</string>
     <!-- Box titles. -->
     <string name="form_add">Add</string>
@@ -56,7 +56,7 @@
     <string name="cancel">cancel</string>
 
     <!--
-      Status messages, in the bottom border of the main screen (the terminal
+      Status messages, in the bottom row of the main screen (the terminal
       app's words, from its tui/src/app.rs). %1$s is the item's title.
     -->
     <string name="status_added">Added \"%1$s\"</string>
