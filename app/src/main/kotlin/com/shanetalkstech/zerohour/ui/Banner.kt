@@ -41,8 +41,7 @@ private const val BLANK = ' '
  * plain ASCII in ASCII icon mode), one gradient colour per column, and the
  * tagline's words. This function only draws them.
  *
- * Its height is the gap row, the letter rows, and one for the tagline (see
- * [bannerRows]).
+ * Its height is the gap row, the letter rows, and one for the tagline.
  */
 @Composable
 fun BannerView(look: TuiLook, banner: Banner, modifier: Modifier = Modifier) {
@@ -71,9 +70,6 @@ fun BannerView(look: TuiLook, banner: Banner, modifier: Modifier = Modifier) {
         )
     }
 }
-
-/** How many rows [BannerView] takes: the gap, the letters, and the tagline. */
-fun bannerRows(banner: Banner): Int = 1 + banner.lines.size + 1
 
 /** How many columns the banner's letters take. */
 fun bannerColumns(banner: Banner): Int = banner.lines.firstOrNull()?.let(::cellCount) ?: 0

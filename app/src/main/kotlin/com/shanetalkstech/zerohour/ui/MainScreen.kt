@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -23,11 +22,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -47,7 +48,6 @@ import uniffi.zerohour_ffi.CompleteOutcome
 import uniffi.zerohour_ffi.Database
 import uniffi.zerohour_ffi.FfiException
 import uniffi.zerohour_ffi.ItemForm
-import uniffi.zerohour_ffi.LayoutMode
 import uniffi.zerohour_ffi.MainScreen
 
 /**
@@ -102,7 +102,7 @@ private data class PendingDelete(val id: String, val title: String)
 
 /**
  * The app's one route: the main screen (a row with the app name and the date,
- * the banner and tagline, and the Tasks and Events boxes), or the
+ * the banner and tagline, the box of the chosen tab and the tab bar), or the
  * add/edit form in its place while one is open.
  *
  * It works out how many character columns and rows fit on the screen, asks the
@@ -111,9 +111,11 @@ private data class PendingDelete(val id: String, val title: String)
  * countdowns stay current while the app is open, and straight after anything
  * changes.
  *
- * Touch: "+ add" in the bottom row opens a new form; one tap on a line
- * opens it for editing; swiping a line right completes it; swiping it left
- * asks whether to delete it.
+ * Touch: the tab bar switches between Tasks, Events and Stats; "+ add"
+ * above it opens a new form; one tap on a line opens it for editing; swiping
+ * a line right completes it; swiping it left asks whether to delete it. The
+ * back gesture on the Events or Stats tab goes back to Tasks, and only on
+ * Tasks leaves the app.
  */
 @Composable
 fun MainRoute() {
@@ -132,6 +134,10 @@ fun MainRoute() {
     var status by remember { mutableStateOf<Status?>(null) }
     var openForm by remember { mutableStateOf<OpenForm?>(null) }
     var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
+    // The tab on show. `rememberSaveable` also keeps it if Android recreates
+    // the screen (for example after the system language changes), not only
+    // across redraws.
+    var tab by rememberSaveable { mutableStateOf(Tab.TASKS) }
     // Runs the Rust calls that change things; they end when the screen goes.
     val scope = rememberCoroutineScope()
 
@@ -172,6 +178,12 @@ fun MainRoute() {
                 reloads++
             }
         }
+    }
+
+    // Back on the Events or Stats tab returns to Tasks. While the form or the
+    // delete box is open, their own back handling applies instead.
+    BackHandler(enabled = tab != Tab.TASKS && openForm == null && pendingDelete == null) {
+        tab = Tab.TASKS
     }
 
     // The theme colours: the saved theme once loaded, the default before.
@@ -240,6 +252,8 @@ fun MainRoute() {
                         rows = rows,
                         narrow = narrow,
                         status = status,
+                        tab = tab,
+                        onSelectTab = { tab = it },
                         onAdd = { openFormWith(adding = true) { it.newForm() } },
                         onEdit = { id -> openFormWith(adding = false) { it.editForm(id) } },
                         onComplete = ::complete,
@@ -302,7 +316,8 @@ private fun millisUntilNextMinute(): Long {
 }
 
 /**
- * The loaded main screen, laid out like the terminal app:
+ * The loaded main screen, laid out like the terminal app's main screen, but
+ * with one box at a time and a tab bar to switch:
  *
  * ```
  *   zerohour · demo        Thu Oct 22 2026
@@ -310,21 +325,28 @@ private fun millisUntilNextMinute(): Long {
  *         5 days to Lake trip
  * ╭ ☐ Tasks (8) ─────────────────────────╮
  * │ ☐ ▲ Send project update      3h      │
- * ╰──────────────────────────────────────╯
- * ╭ ◷ Events (5) ────────────────────────╮
- * │ ◷ Lake trip                  5d      │
+ * │ ...                                  │
  * ╰──────────────────────────────────────╯
  *   Added "Call mum"                + add
+ * ╭────────────┬────────────┬────────────╮
+ * │  ☐ Tasks   │  ◷ Events  │  ▤ Stats   │
+ * ╰────────────┴────────────┴────────────╯
  * ```
  *
  * Unlike the terminal app there is no frame around the whole screen: on a
- * phone every column counts, so the Tasks and Events boxes run to the edges.
- * The header and the bottom row keep their text where the frame's edges had
- * it.
+ * phone every column counts, so the boxes run to the edges. The header and
+ * the bottom row keep their text where the frame's edges had it.
+ *
+ * The Tasks and Events tabs each show their box, filling all the height
+ * there is (so the terminal app's "split" and "fit" layouts, which share the
+ * height between the two boxes, do not apply here), with the banner above.
+ * The Stats tab has no banner and no "+ add" row, as the terminal app's stats
+ * screen has neither.
  *
  * [columns] and [rows] are how many character cells fit on the screen.
  * [status] is the message for the bottom row, if any; without one, the row
- * shows the gesture hint ("→ done  ← delete  tap edit"). [onAdd] runs when
+ * shows the gesture hint ("→ done  ← delete  tap edit"). [tab] is the tab on
+ * show, and [onSelectTab] runs when another one is tapped. [onAdd] runs when
  * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID),
  * [onComplete] when one is swiped right, [onDelete] when one is swiped left
  * (with its ID and title).
@@ -337,18 +359,20 @@ private fun MainScreenContent(
     rows: Int,
     narrow: Boolean,
     status: Status?,
+    tab: Tab,
+    onSelectTab: (Tab) -> Unit,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
     onComplete: (String) -> Unit,
     onDelete: (id: String, title: String) -> Unit,
 ) {
     val settings = screen.settings
-    // The banner needs: the setting on, room for its letters with a column
-    // to spare on each side, and a tall enough screen.
-    val bannerShown = settings.showBanner &&
+    // The banner needs: a list tab, the setting on, room for its letters with
+    // a column to spare on each side, and a tall enough screen.
+    val bannerShown = tab != Tab.STATS &&
+        settings.showBanner &&
         columns >= bannerColumns(screen.banner) + 2 &&
         rows >= BANNER_MIN_ROWS
-    val bannerRows = if (bannerShown) bannerRows(screen.banner) else 0
 
     Column(modifier = Modifier.fillMaxSize()) {
         HeaderRow(look, headerTitle(look, screen.demo), screen.today)
@@ -356,56 +380,61 @@ private fun MainScreenContent(
             BannerView(look, screen.banner)
         }
 
-        // How the two boxes share the height left over. `weight(1f)` means
-        // "a share of the free space"; two boxes with weight 1 get half
-        // each. In the "fit" layout the Events box is sized to its lines
-        // instead (but never more than half), and Tasks get the rest.
-        val eventsModifier = when (settings.layout) {
-            LayoutMode.SPLIT -> Modifier.weight(1f)
-            LayoutMode.FIT -> {
-                // Rows for the boxes: minus the header and the bottom row.
-                val freeRows = rows - 2 - bannerRows
-                val half = maxOf(freeRows / 2, 3)
-                Modifier.height(look.cell.rows(eventsBoxRows(screen.events.size).coerceIn(3, half)))
-            }
+        // The chosen tab's content takes all the height the rows around it
+        // leave (`weight(1f)`: the whole share of the free space).
+        val fill = Modifier
+            .weight(1f)
+            .fillMaxWidth()
+        when (tab) {
+            Tab.TASKS -> TasksBox(
+                look = look,
+                tasks = screen.tasks,
+                taskIcon = screen.taskIcon,
+                narrow = narrow,
+                showDates = columns >= DATE_COLUMNS,
+                onEdit = onEdit,
+                onComplete = onComplete,
+                onDelete = onDelete,
+                modifier = fill,
+            )
+            Tab.EVENTS -> EventsBox(
+                look = look,
+                events = screen.events,
+                eventIcon = screen.eventIcon,
+                narrow = narrow,
+                showDates = columns >= DATE_COLUMNS,
+                onEdit = onEdit,
+                onComplete = onComplete,
+                onDelete = onDelete,
+                modifier = fill,
+            )
+            Tab.STATS -> Box(modifier = fill)
         }
-
-        TasksBox(
+        if (tab != Tab.STATS) {
+            FooterRow(
+                look = look,
+                // A status message when there is one, the gesture hint otherwise.
+                message = status?.let {
+                    AnnotatedString(
+                        it.text,
+                        SpanStyle(color = look.color(if (it.isError) ColorSlot.DANGER else ColorSlot.OK)),
+                    )
+                } ?: gestureHint(look),
+                onAdd = onAdd,
+                // Drawn on top of its neighbours, so its enlarged "+ add" tap
+                // area wins where it reaches over the box's bottom line above
+                // and the tab bar's top line below.
+                modifier = Modifier.zIndex(1f),
+            )
+        }
+        TabBar(
             look = look,
-            tasks = screen.tasks,
+            columns = columns,
+            selected = tab,
             taskIcon = screen.taskIcon,
-            narrow = narrow,
-            showDates = columns >= DATE_COLUMNS,
-            onEdit = onEdit,
-            onComplete = onComplete,
-            onDelete = onDelete,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-        )
-        EventsBox(
-            look = look,
-            events = screen.events,
             eventIcon = screen.eventIcon,
-            narrow = narrow,
-            showDates = columns >= DATE_COLUMNS,
-            onEdit = onEdit,
-            onComplete = onComplete,
-            onDelete = onDelete,
-            modifier = eventsModifier.fillMaxWidth(),
-        )
-        // Last, so its enlarged "+ add" tap area is drawn on top of (and wins
-        // over) the Events box's bottom line.
-        FooterRow(
-            look = look,
-            // A status message when there is one, the gesture hint otherwise.
-            message = status?.let {
-                AnnotatedString(
-                    it.text,
-                    SpanStyle(color = look.color(if (it.isError) ColorSlot.DANGER else ColorSlot.OK)),
-                )
-            } ?: gestureHint(look),
-            onAdd = onAdd,
+            statsIcon = screen.statsIcon,
+            onSelect = onSelectTab,
         )
     }
 }
@@ -471,12 +500,13 @@ private fun gestureHint(look: TuiLook): AnnotatedString {
  * The bottom row of the main screen: [message] on the left (it ends in "…"
  * if it is too long), and the tappable "+ add" on the right, which runs
  * [onAdd]. Both sit one column in from the edges, where the terminal app's
- * frame shows them in its bottom border.
+ * frame shows them in its bottom border. [modifier] is for the caller's
+ * drawing order.
  */
 @Composable
-private fun FooterRow(look: TuiLook, message: AnnotatedString, onAdd: () -> Unit) {
+private fun FooterRow(look: TuiLook, message: AnnotatedString, onAdd: () -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = look.cell.columns(1)),
     ) {

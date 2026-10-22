@@ -113,9 +113,11 @@ fun TuiBox(
  * and never thinner than one pixel).
  *
  * This is an *extension function* on `DrawScope`: inside it, `size` and the
- * `drawRoundRect` call refer to the canvas being drawn on.
+ * `drawRoundRect` call refer to the canvas being drawn on. It is `internal`
+ * (usable anywhere in the app, not outside it) so the tab bar can draw the
+ * same border.
  */
-private fun DrawScope.drawTuiBorder(color: Color, cellWidth: Float, cellHeight: Float) {
+internal fun DrawScope.drawTuiBorder(color: Color, cellWidth: Float, cellHeight: Float) {
     val thickness = (cellWidth * 0.15f).coerceAtLeast(1f)
     val left = cellWidth / 2
     val top = cellHeight / 2
