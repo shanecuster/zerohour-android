@@ -180,6 +180,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Generates the small `BuildConfig` class. The app reads its `DEBUG`
+        // flag to open core's in-memory demo database in debug builds only.
+        buildConfig = true
     }
 }
 
