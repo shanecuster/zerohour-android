@@ -30,9 +30,12 @@
 //! * **Changing items** (`items` module) -- `Database` methods to open a form,
 //!   save it, save the calendar's week start, complete a task and delete an
 //!   item.
+//! * **The stats screen** (`stats` module) -- `Database::stats_screen` returns
+//!   the totals, streaks, weekly counts and priority breakdown from core's
+//!   `stats::compute`, the same numbers the terminal app shows.
 //! * **Errors** (`error` module) -- the one `FfiError` type Kotlin catches.
 //!
-//! Later steps add stats and sync. All the real logic lives in
+//! Later steps add sync. All the real logic lives in
 //! `zerohour-core`; the functions here are thin.
 //!
 //! ## Why mirror types instead of exporting core's types directly?
@@ -55,6 +58,7 @@ pub mod error;
 pub mod form;
 pub mod items;
 pub mod screen;
+pub mod stats;
 
 use zerohour_core::theme::{DEFAULT_THEME, Rgb, THEMES, Theme};
 
