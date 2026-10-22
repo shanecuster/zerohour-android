@@ -1,0 +1,34 @@
+# The "glue" library between Kotlin and zerohour-core.
+#
+# Kotlin cannot call Rust directly. Android apps load native code as a shared
+# library (a `.so` file) and call into it. This crate is that library: it takes
+# the pieces of `zerohour-core` the app needs and exports them in a shape UniFFI
+# can bridge. UniFFI then generates the Kotlin side automatically.
+#
+# zerohour's sync is blocking (it uses `ureq`, not an async runtime), so, unlike
+# tuxwire, this crate exports NO async functions and pulls in no tokio. Kotlin
+# calls these functions on a background thread (`Dispatchers.IO`) instead.
+[package]
+name = "zerohour-ffi"
+version = "0.1.0"
+edition = "2024"
+# Not meant to be published to crates.io.
+publish = false
+
+[lib]
+# The file name of the compiled library becomes `libzerohour_ffi.so`; the Kotlin
+# bindings load it by that name.
+name = "zerohour_ffi"
+# A crate can be built in several forms at once:
+#   "cdylib" = a C-compatible dynamic library -- the `.so` Android loads.
+#   "lib"    = a normal Rust library -- lets this crate's own tests run, and
+#              lets other Rust code link against it.
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+# The shared engine (pinned to one exact commit in ../Cargo.toml).
+zerohour-core.workspace = true
+
+# UniFFI generates the Kotlin <-> Rust bridge from the `#[uniffi::export]`
+# items in src/lib.rs. No extra features are needed: there are no async exports.
+uniffi.workspace = true

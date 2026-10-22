@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The *Android* theme: the look of the window itself before and around our
+  Compose screen (status bar, the blank frame while the app starts). The colours
+  INSIDE the app come from zerohour's own themes (Everforest, Nord, ...), chosen
+  in code; this file only has to make sure the first moments do not flash white.
+-->
+<resources>
+    <!--
+      Inherit from Android's built-in "Material, no title bar" theme, then paint
+      the window and system bars black so launching looks clean on every
+      zerohour theme (all of which are dark).
+    -->
+    <style name="Theme.Zerohour" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

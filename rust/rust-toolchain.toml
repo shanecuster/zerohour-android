@@ -1,0 +1,28 @@
+# rust-toolchain.toml -- which Rust compiler this workspace is built with.
+#
+# rustup (the Rust installer) reads this file automatically whenever `cargo`
+# runs inside `rust/`, and installs exactly this version, plus the extra
+# targets listed, if they are missing. Pinning the compiler (instead of using
+# "whatever stable is today") is part of making builds reproducible, which
+# F-Droid needs: the same source must build the same way next year.
+#
+# To move to a newer Rust on purpose: change `channel`, then run the tests and
+# a release build, and commit the change by itself.
+[toolchain]
+# The exact Rust release. This is the version the project was tested with.
+channel = "1.97.0"
+# "minimal" installs just the compiler and standard library; the extras the
+# project's checks need (clippy and rustfmt) are listed under `components`.
+profile = "minimal"
+components = ["clippy", "rustfmt"]
+# The Android CPU types (see ZEROHOUR_ABIS in scripts/build-rust.sh):
+#   aarch64-linux-android     arm64-v8a    64-bit phones
+#   armv7-linux-androideabi   armeabi-v7a  old 32-bit phones
+#   x86_64-linux-android      x86_64       the emulator on a PC
+#   i686-linux-android        x86          old 32-bit emulators
+targets = [
+    "aarch64-linux-android",
+    "armv7-linux-androideabi",
+    "x86_64-linux-android",
+    "i686-linux-android",
+]

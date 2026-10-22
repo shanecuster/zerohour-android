@@ -1,0 +1,60 @@
+# Workspace manifest for the Rust half of zerohour-android.
+#
+# The Android app is written in Kotlin, but the real work -- the data model,
+# the date math, the SQLite database, the theme palettes -- is done by
+# `zerohour-core`, the same Rust library the terminal version of zerohour uses.
+# This workspace builds the thin "glue" that lets Kotlin call that library:
+#
+#   zerohour-ffi    the glue library (becomes libzerohour_ffi.so on the phone)
+#   uniffi-bindgen  a tiny helper program that reads the glue library and
+#                   writes the matching Kotlin source file
+#
+# A *workspace* is a set of Rust crates (packages) built together. They share
+# one Cargo.lock (so every build uses the exact same dependency versions) and
+# one `target/` output directory.
+[workspace]
+members = ["zerohour-ffi", "uniffi-bindgen"]
+
+# Resolver "3" is the dependency-resolution algorithm that goes with Rust
+# edition 2024. A workspace root has no edition of its own to infer it from,
+# so it is stated explicitly.
+resolver = "3"
+
+# Versions are declared once here and the member crates say
+# `name.workspace = true`, so the two crates can never disagree.
+[workspace.dependencies]
+# The shared engine, taken straight from the zerohour repository on GitHub.
+#
+# `rev` pins ONE exact commit instead of "whatever is newest". That matters for
+# two reasons: (1) builds are reproducible -- the same source always produces
+# the same app, which F-Droid requires; (2) a change to zerohour's master can
+# never silently break this app. To move to a newer core, merge and push the
+# core work in the `zerohour` repo first, then change this hash on purpose, in
+# its own commit, and rebuild and test.
+#
+# `default-features = false, features = ["sync"]` builds core with CouchDB sync
+# but WITHOUT the `keyring` feature: on Android the sync password lives in the
+# Android Keystore (handled by Kotlin), not in a desktop OS keyring. Core has no
+# default features, so `default-features = false` only makes that explicit.
+#
+# To work on an unreleased core at the same time, add a git-ignored
+# rust/.cargo/config.toml that `[patch]`es this with a relative path; see the
+# README. It is never committed, so committed builds always use this commit.
+zerohour-core = { git = "https://github.com/shanecuster/zerohour", rev = "87255bf5396dbf552ee107a63b882d14efcb7eda", default-features = false, features = ["sync"] }
+
+# UniFFI: Mozilla's tool that generates the Kotlin <-> Rust bridge code so we
+# never have to write JNI (Java's low-level native interface) by hand.
+uniffi = "0.32.2"
+
+# Settings for optimized ("release") builds, which is what ships on a phone.
+[profile.release]
+# "s" asks the compiler to optimize for small size rather than raw speed.
+# Phones care about APK size, and this library does little heavy computation.
+opt-level = "s"
+# Link-time optimization lets the compiler remove unused code across crates,
+# shrinking the final .so a lot. "thin" is a good size/compile-time balance.
+lto = "thin"
+# One code-generation unit per crate: slower to compile, slightly smaller.
+codegen-units = 1
+# Remove debug symbols from the shipped library.
+strip = true

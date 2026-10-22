@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AndroidManifest.xml: the app's "identity card", read by Android before any of
+  our code runs. It declares what the app is called, which screen opens first,
+  and which special abilities (permissions) the app asks the user for.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      INTERNET lets the app reach the user's own sync server (an opt-in feature,
+      off by default). It is a "normal" permission: Android grants it at install
+      time and never shows a prompt. This is the ONLY permission for now; the
+      later reminders step adds POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM and
+      RECEIVE_BOOT_COMPLETED.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@style/Theme.Zerohour"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+        <!--
+          allowBackup="false": do not copy the app's private data into Google's
+          cloud backups. Tasks, events and the encrypted sync password stay on
+          the device unless the user turns on sync to their own server.
+
+          No android:icon yet: Android supplies a default launcher icon. The
+          real icon is part of release preparation (the last plan step).
+        -->
+
+        <!--
+          The one screen. `exported="true"` is required for the screen that the
+          launcher starts. The <intent-filter> says "this is the app's main
+          entry point and should appear in the app drawer".
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
