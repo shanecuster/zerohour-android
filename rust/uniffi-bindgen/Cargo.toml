@@ -1,0 +1,19 @@
+# A tiny helper program, not part of the app itself.
+#
+# UniFFI can read a compiled glue library (libzerohour_ffi.so), find the
+# functions and types we exported from Rust, and write the Kotlin file that
+# lets the app call them. The code that does this lives inside the `uniffi`
+# crate behind its `cli` feature. Putting it in its own little crate keeps that
+# command-line machinery (argument parsing and so on) out of the library that
+# actually ships on the phone.
+#
+# Run it through scripts/build-rust.sh rather than by hand.
+[package]
+name = "uniffi-bindgen"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+# `features = ["cli"]` switches on the bindings generator itself.
+uniffi = { workspace = true, features = ["cli"] }
