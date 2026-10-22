@@ -12,16 +12,22 @@
 //!
 //! ## Dates across the bridge
 //!
-//! Kotlin passes "now" as text in one fixed shape, `2026-10-22T14:30:00` (the
-//! local wall-clock time, no time zone, see [`NOW_FORMAT`]), and this crate
-//! parses it. Core never reads the clock itself (so its tests can pretend it is
-//! any moment), and following the same rule here keeps the Rust side testable
-//! too.
+//! Kotlin passes "now" as text in one fixed shape, `2026-10-22T14:30:00+02:00`
+//! (the local wall-clock time plus the phone's offset from UTC, see
+//! [`NOW_FORMAT`]), and this crate parses it. Core never reads the clock itself
+//! (so its tests can pretend it is any moment), and following the same rule
+//! here keeps the Rust side testable too.
+//!
+//! Why the offset: core needs "now" in two forms. Due dates, overdue checks
+//! and the next repeat work in *wall-clock* time (what the phone's clock
+//! shows), while stored timestamps (`created_at`, `completed_at`, ...) are in
+//! UTC. One text with the offset gives both, with no guessing on the hour a
+//! daylight-saving change makes ambiguous.
 
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use zerohour_core::clock::TimeFormat;
 use zerohour_core::db::{Db, settings_keys};
 use zerohour_core::icons::IconMode as CoreIconMode;
@@ -31,17 +37,33 @@ use crate::ThemeInfo;
 use crate::error::FfiError;
 
 /// The shape of the "now" text Kotlin sends: ISO 8601 local date and time,
-/// to the second, e.g. `2026-10-22T14:30:00`. In chrono's format language,
-/// `%Y-%m-%d` is the date, `T` is a literal letter, and `%H:%M:%S` is the
-/// 24-hour time. Kotlin formats with the matching pattern
-/// `yyyy-MM-dd'T'HH:mm:ss`.
-pub const NOW_FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
+/// to the second, plus the offset from UTC, e.g. `2026-10-22T14:30:00+02:00`.
+/// In chrono's format language, `%Y-%m-%d` is the date, `T` is a literal
+/// letter, `%H:%M:%S` is the 24-hour time and `%:z` the offset with a colon.
+/// Kotlin formats with the matching pattern `yyyy-MM-dd'T'HH:mm:ssxxx`.
+pub const NOW_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%:z";
 
-/// Turns the "now" text from Kotlin into a date-time, or explains what is wrong
+/// "Now" in the two forms core asks for (see the module notes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Now {
+    /// The wall-clock date and time on the phone, with no time zone.
+    pub local: NaiveDateTime,
+    /// The same moment in UTC, for stored timestamps.
+    pub utc: DateTime<Utc>,
+}
+
+/// Turns the "now" text from Kotlin into a [`Now`], or explains what is wrong
 /// with it. Shared by every export that takes a `now`.
-pub(crate) fn parse_now(now: &str) -> Result<NaiveDateTime, FfiError> {
-    NaiveDateTime::parse_from_str(now, NOW_FORMAT).map_err(|e| FfiError::InvalidInput {
-        detail: format!("\"{now}\" is not a local date-time like 2026-10-22T14:30:00 ({e})"),
+pub(crate) fn parse_now(now: &str) -> Result<Now, FfiError> {
+    // `DateTime<FixedOffset>`: a moment together with the offset it was
+    // written in. `naive_local` drops the offset (wall-clock time);
+    // `with_timezone(&Utc)` moves it to UTC.
+    let parsed = DateTime::parse_from_str(now, NOW_FORMAT).map_err(|e| FfiError::InvalidInput {
+        detail: format!("\"{now}\" is not a local date-time like 2026-10-22T14:30:00+02:00 ({e})"),
+    })?;
+    Ok(Now {
+        local: parsed.naive_local(),
+        utc: parsed.with_timezone(&Utc),
     })
 }
 
@@ -234,7 +256,7 @@ impl Database {
     /// each sample completion lands on the intended local day.
     #[uniffi::constructor]
     pub fn open_demo(now: String) -> Result<Arc<Database>, FfiError> {
-        let now = parse_now(&now)?;
+        let now = parse_now(&now)?.local;
         let db = Db::open_in_memory()?;
         zerohour_core::demo::seed(&db, now, &chrono::Local)?;
         Ok(Database::wrap(db, true))
@@ -267,9 +289,18 @@ mod tests {
     }
 
     #[test]
-    fn now_must_be_a_full_iso_local_date_time() {
-        assert!(parse_now("2026-10-22T14:30:00").is_ok());
-        for bad in ["", "2026-10-22", "2026-10-22T14:30", "22/10/2026 14:30:00"] {
+    fn now_must_be_a_full_iso_local_date_time_with_offset() {
+        let now = parse_now("2026-10-22T14:30:00+02:00").unwrap();
+        // Wall-clock time as written; UTC two hours earlier.
+        assert_eq!(now.local.to_string(), "2026-10-22 14:30:00");
+        assert_eq!(now.utc.to_rfc3339(), "2026-10-22T12:30:00+00:00");
+        for bad in [
+            "",
+            "2026-10-22",
+            "2026-10-22T14:30:00",
+            "2026-10-22T14:30+02:00",
+            "22/10/2026 14:30:00+02:00",
+        ] {
             let error = parse_now(bad).unwrap_err();
             assert!(
                 matches!(error, FfiError::InvalidInput { .. }),
@@ -280,7 +311,7 @@ mod tests {
 
     #[test]
     fn demo_database_is_flagged_and_uses_android_defaults() {
-        let db = Database::open_demo("2026-10-22T09:15:00".to_string()).unwrap();
+        let db = Database::open_demo("2026-10-22T09:15:00+02:00".to_string()).unwrap();
         assert!(db.is_demo());
         let settings = db.display_settings().unwrap();
         assert_eq!(settings.theme.name, DEFAULT_THEME);
