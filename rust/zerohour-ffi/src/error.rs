@@ -8,13 +8,17 @@ use zerohour_core::db::DbError;
 
 /// Everything that can go wrong in a call from Kotlin.
 ///
-/// Two variants, because the app reacts to them differently:
+/// Three variants, because the app reacts to them differently:
 ///
 /// * `Database` -- the SQLite file could not be opened, read or written. The
 ///   app shows the explanation to the user.
 /// * `InvalidInput` -- Kotlin passed something this crate could not
 ///   understand (for example a badly formatted date). That is a bug in the
 ///   app, not something the user did, so it is mostly useful in logs.
+/// * `Sync` -- the sync details are incomplete or not allowed, or the server
+///   could not be reached or refused the login. The app shows the
+///   explanation on the sync settings screen. It never contains the
+///   password.
 ///
 /// The field is called `detail`, not `message`, on purpose: Kotlin's built-in
 /// exception class already has a property named `message`, and a generated
@@ -31,6 +35,12 @@ pub enum FfiError {
         /// What was wrong with it.
         detail: String,
     },
+    /// Sync settings or a connection to the sync server failed. `detail` says
+    /// what to fix, in core's words where core has them.
+    Sync {
+        /// The explanation to show.
+        detail: String,
+    },
 }
 
 /// How an `FfiError` prints. Required for any error type: it is the text shown
@@ -42,6 +52,7 @@ impl std::fmt::Display for FfiError {
         match self {
             FfiError::Database { detail } => write!(f, "database error: {detail}"),
             FfiError::InvalidInput { detail } => write!(f, "invalid input: {detail}"),
+            FfiError::Sync { detail } => write!(f, "sync: {detail}"),
         }
     }
 }
