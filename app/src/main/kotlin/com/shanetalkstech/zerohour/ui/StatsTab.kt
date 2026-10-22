@@ -13,10 +13,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.shanetalkstech.zerohour.R
 import uniffi.zerohour_ffi.ColorSlot
+import uniffi.zerohour_ffi.PriorityCount
 import uniffi.zerohour_ffi.StatsScreen
 
 // The Stats tab. It follows the terminal app's stats screen
@@ -42,6 +45,9 @@ private const val CARD_ROWS = 4
  * ╰───────────────────╯╰──────────────────╯
  * ╭ Completions per week ──────────────────╮
  * │ ...the bars, see [WeekChart]...        │
+ * ╰────────────────────────────────────────╯
+ * ╭ By priority ───────────────────────────╮
+ * │ ▲ High 31  ● Medium 35  ▼ Low 22       │
  * ╰────────────────────────────────────────╯
  * ```
  *
@@ -80,6 +86,7 @@ fun StatsTab(
                 .weight(1f)
                 .fillMaxWidth(),
         )
+        PriorityBox(look, stats.byPriority)
     }
 }
 
@@ -195,4 +202,45 @@ private fun CardLine(text: String, style: TextStyle) {
         softWrap = false,
         overflow = TextOverflow.Ellipsis,
     )
+}
+
+/**
+ * Completions by priority, in its own box (the terminal app shows them on one
+ * line under the chart, which a phone is too narrow for with its label):
+ * each priority's icon and name in its colour, then the count in the normal
+ * text colour and bold, two blanks between priorities. The order (High,
+ * Medium, Low), icons and colours come from the Rust side.
+ */
+@Composable
+private fun PriorityBox(look: TuiLook, priorities: List<PriorityCount>) {
+    val line = buildAnnotatedString {
+        // `forEachIndexed` also gives each priority's position, so the gap
+        // goes only between priorities, not after the last one.
+        priorities.forEachIndexed { index, priority ->
+            if (index > 0) append("  ")
+            withStyle(SpanStyle(color = look.color(priority.slot))) {
+                append("${priority.icon} ${priority.label} ")
+            }
+            withStyle(SpanStyle(color = look.color(ColorSlot.FOREGROUND), fontWeight = FontWeight.Bold)) {
+                append(priority.count.toString())
+            }
+        }
+    }
+    TuiBox(
+        look = look,
+        borderColor = look.color(ColorSlot.BORDER),
+        modifier = Modifier.fillMaxWidth(),
+        title = AnnotatedString(
+            " ${stringResource(R.string.stats_by_priority)} ",
+            SpanStyle(color = look.color(ColorSlot.MUTED)),
+        ),
+    ) {
+        BasicText(
+            text = line,
+            style = look.text,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }

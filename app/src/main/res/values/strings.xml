@@ -34,6 +34,8 @@
          has been completed (the terminal app says "with space"). -->
     <string name="stats_chart_title">Completions per week</string>
     <string name="stats_chart_empty">No completions yet. Swipe a task right to finish it and it shows up here.</string>
+    <!-- The title of the box with the completions by priority. -->
+    <string name="stats_by_priority">By priority</string>
     <!-- The streak's big number: "1 day", "9 days". -->
     <plurals name="stats_days">
         <item quantity="one">%1$d day</item>
