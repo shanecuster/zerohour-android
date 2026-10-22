@@ -434,10 +434,11 @@ private fun FieldLine(
                     // "‹ Medium ›": the arrows step back and forward through
                     // the choices, starting in the value column like the
                     // terminal app's. The arrows' blanks are part of their
-                    // tap targets.
-                    TapText(look, "‹ ", accent, onClick = { onStep(false) })
+                    // tap targets, which are enlarged to at least 48dp
+                    // (`largeTarget`) without moving the text.
+                    TapText(look, "‹ ", accent, onClick = { onStep(false) }, largeTarget = true)
                     BasicText(text = row.value, style = look.text.copy(color = foreground))
-                    TapText(look, " › ", accent, onClick = { onStep(true) })
+                    TapText(look, " › ", accent, onClick = { onStep(true) }, largeTarget = true)
                 }
 
                 FormField.KEEP_AFTER_PASS -> {
