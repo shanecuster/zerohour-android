@@ -40,6 +40,9 @@ private const val CARD_ROWS = 4
  * │ 1                 ││ 93%              │
  * │ past due          ││ 7 done late      │
  * ╰───────────────────╯╰──────────────────╯
+ * ╭ Completions per week ──────────────────╮
+ * │ ...the bars, see [WeekChart]...        │
+ * ╰────────────────────────────────────────╯
  * ```
  *
  * [columns] is the screen's width in character cells. [narrow] (under 60
@@ -68,6 +71,15 @@ fun StatsTab(
         } else {
             CardRow(look, cards, columns)
         }
+        // The chart takes all the height the other parts leave.
+        WeekChart(
+            look = look,
+            weeks = stats.weeks,
+            empty = stats.totalAll == 0u,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        )
     }
 }
 
