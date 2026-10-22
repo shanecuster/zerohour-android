@@ -224,7 +224,7 @@ impl Database {
     }
 
     /// Wraps an open `Db` in the lock and the shared pointer Kotlin receives.
-    fn wrap(db: Db, demo: bool) -> Arc<Database> {
+    pub(crate) fn wrap(db: Db, demo: bool) -> Arc<Database> {
         Arc::new(Database {
             db: Mutex::new(db),
             demo,
