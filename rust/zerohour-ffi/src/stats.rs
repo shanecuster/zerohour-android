@@ -14,12 +14,12 @@
 //! words around the numbers ("Completed", "best 9") are the Android app's own
 //! texts, kept in `strings.xml` like the rest of its words.
 
-use zerohour_core::icons::{Icon, priority_icon};
+use zerohour_core::icons::priority_icon;
 use zerohour_core::model::Priority;
 use zerohour_core::stats;
 use zerohour_core::view;
 
-use crate::database::{Database, DisplaySettings, StoredSettings, parse_now};
+use crate::database::{Database, StoredSettings, parse_now};
 use crate::error::FfiError;
 use crate::screen::ColorSlot;
 
@@ -50,18 +50,10 @@ pub struct PriorityCount {
     pub count: u32,
 }
 
-/// Everything the stats screen draws.
+/// Everything the stats screen draws, apart from the header and the tab bar,
+/// which come from the main screen (Kotlin reads both together).
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct StatsScreen {
-    /// The display settings (theme, icons), so the stats screen can be drawn
-    /// in the saved theme without a second call.
-    pub settings: DisplaySettings,
-    /// True for the in-memory demo database (the header says "demo").
-    pub demo: bool,
-    /// Today's date for the header, e.g. "Thu Oct 22 2026".
-    pub today: String,
-    /// The stats icon (for the tab bar).
-    pub stats_icon: String,
     /// Completions ever.
     pub total_all: u32,
     /// Completions this week (Monday to today).
@@ -162,10 +154,6 @@ impl Database {
         .collect();
 
         Ok(StatsScreen {
-            settings: settings.to_display(),
-            demo: self.is_demo(),
-            today: view::long_date(now.date()),
-            stats_icon: Icon::Stats.get(mode).to_string(),
             total_all: s.total_all,
             total_week: s.total_week,
             total_month: s.total_month,
@@ -213,8 +201,6 @@ mod tests {
             "{}",
             screen.on_time_text
         );
-        assert!(screen.demo);
-        assert_eq!(screen.today, "Thu Oct 22 2026");
     }
 
     #[test]
@@ -289,7 +275,6 @@ mod tests {
         assert_eq!(screen.on_time_text, "–");
         assert_eq!(screen.weeks.len(), WEEKS_SHOWN);
         assert!(screen.weeks.iter().all(|w| w.count == 0));
-        assert!(!screen.demo);
         let _ = std::fs::remove_file(&path);
     }
 
