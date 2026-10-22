@@ -1,10 +1,12 @@
 package com.shanetalkstech.zerohour
 
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.shanetalkstech.zerohour.ui.SkeletonScreen
+import com.shanetalkstech.zerohour.ui.MainRoute
 
 /**
  * The app's one and only Android "Activity": the screen the launcher opens.
@@ -12,12 +14,7 @@ import com.shanetalkstech.zerohour.ui.SkeletonScreen
  * In Android, an Activity is the entry point for a screen. Everything you see
  * is drawn by Jetpack Compose, a toolkit where the UI is described by ordinary
  * Kotlin functions marked `@Composable`, so this class has almost nothing to
- * do: it just hands the screen over to Compose.
- *
- * This is the skeleton (plan step 3): it proves the whole chain works -- Gradle
- * builds the Rust library, loads it, and calls into it -- by showing the
- * version string the Rust side reports, in a colour from the shared theme. The
- * real screens come in later steps.
+ * do: it sets up the window and hands the screen over to Compose.
  */
 class MainActivity : ComponentActivity() {
 
@@ -32,13 +29,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Draw behind the status bar and the navigation bar so the theme's
-        // background colour fills the whole screen, like a terminal would.
-        enableEdgeToEdge()
+        // background fills the whole screen, like a terminal would. The bars
+        // themselves are transparent; `SystemBarStyle.dark` asks for light
+        // icons on them, because every zerohour theme has a dark background.
+        // (TRANSPARENT is "no colour at all", not a theme colour.)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
 
         // `setContent` gives Compose the root of the screen. Everything from
         // here down is `@Composable` functions.
         setContent {
-            SkeletonScreen()
+            MainRoute()
         }
     }
 }

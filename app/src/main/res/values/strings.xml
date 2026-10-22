@@ -1,9 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Text the app shows that lives outside the code, so it can be changed (or
-  translated) without touching Kotlin. For now there is just the app's name,
-  which appears under the launcher icon.
+  translated) without touching Kotlin. Texts that the terminal app shares
+  ("due in 3d", the tagline, dates) are NOT here: they come from the Rust core,
+  so both apps always say the same thing.
 -->
 <resources>
+    <!-- The app's name: under the launcher icon and in the header. -->
     <string name="app_name">zerohour</string>
+    <!-- After the name in the header when the demo database is showing. -->
+    <string name="demo_suffix">" · demo"</string>
+    <!-- Section box titles. -->
+    <string name="tasks">Tasks</string>
+    <string name="events">Events</string>
+    <!-- Shown inside an empty section box. -->
+    <string name="no_tasks">Nothing to do.</string>
+    <string name="no_events">No countdowns yet.</string>
+    <!-- Shown for the moment it takes to open the database. -->
+    <string name="loading">Loading…</string>
+    <!-- Title of the box that explains why the database could not be read. -->
+    <string name="error_title">" error "</string>
 </resources>
