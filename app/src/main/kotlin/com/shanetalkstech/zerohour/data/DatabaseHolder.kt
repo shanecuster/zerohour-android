@@ -81,6 +81,8 @@ object DatabaseHolder {
         // running on it to finish first, so this is safe from any thread.
         database?.destroy()
         database = null
+        // A sync result from the other database would be misleading now.
+        SyncRunner.forget()
     }
 
     /** The "real database chosen" flag file (see [REAL_DATA_FLAG]). */

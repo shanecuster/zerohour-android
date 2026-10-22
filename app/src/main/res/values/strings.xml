@@ -167,4 +167,8 @@
     <!-- After a test, when the clocks differ by more than a minute. %1$s is minutes. -->
     <string name="sync_clock_ahead">⚠ This phone\'s clock is %1$s min ahead of the server\'s. The newest edit wins a conflict, so set the phone\'s time to automatic.</string>
     <string name="sync_clock_behind">⚠ This phone\'s clock is %1$s min behind the server\'s. The newest edit wins a conflict, so set the phone\'s time to automatic.</string>
+
+    <!-- Sync now: why it could not start, and an unexpected failure. -->
+    <string name="sync_no_password">No password saved; enter it on the Sync page.</string>
+    <string name="sync_failed_unexpectedly">The sync failed unexpectedly. Try again.</string>
 </resources>
