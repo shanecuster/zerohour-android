@@ -17,7 +17,7 @@ import com.shanetalkstech.zerohour.R
 import uniffi.zerohour_ffi.ColorSlot
 
 /** The box is this many cells wide at most, like the terminal app's. */
-private const val CONFIRM_BOX_CELLS = 50
+internal const val CONFIRM_BOX_CELLS = 50
 
 /**
  * "Really delete?", asked after a line is swiped left, in a box like the
