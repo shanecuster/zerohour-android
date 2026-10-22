@@ -33,6 +33,9 @@
 //! * **The stats screen** (`stats` module) -- `Database::stats_screen` returns
 //!   the totals, streaks, weekly counts and priority breakdown from core's
 //!   `stats::compute`, the same numbers the terminal app shows.
+//! * **Display settings** (`settings` module) -- the theme, icons, 12/24-hour
+//!   times, week start and banner, read and saved the way the terminal app
+//!   stores them.
 //! * **Errors** (`error` module) -- the one `FfiError` type Kotlin catches.
 //!
 //! Later steps add sync. All the real logic lives in
@@ -58,6 +61,7 @@ pub mod error;
 pub mod form;
 pub mod items;
 pub mod screen;
+pub mod settings;
 pub mod stats;
 
 use zerohour_core::theme::{DEFAULT_THEME, Rgb, THEMES, Theme};

@@ -64,7 +64,7 @@ pub enum CompleteOutcome {
 }
 
 /// Reads the saved first day of the week (Sunday if nothing is saved).
-fn load_week_start(db: &Db) -> Result<CoreWeekStart, FfiError> {
+pub(crate) fn load_week_start(db: &Db) -> Result<CoreWeekStart, FfiError> {
     Ok(CoreWeekStart::parse(
         db.get_setting(settings_keys::WEEK_START)?.as_deref(),
     ))
