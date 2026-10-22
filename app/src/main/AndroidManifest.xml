@@ -34,9 +34,16 @@
           launcher starts. The <intent-filter> says "this is the app's main
           entry point and should appear in the app drawer".
         -->
+        <!--
+          windowSoftInputMode="adjustResize": when the keyboard opens, the
+          screen shrinks to the space above it (instead of the keyboard
+          covering the add/edit form), so the field being typed in stays
+          visible.
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

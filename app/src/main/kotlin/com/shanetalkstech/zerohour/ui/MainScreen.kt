@@ -15,8 +15,10 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -28,12 +30,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import com.shanetalkstech.zerohour.R
 import com.shanetalkstech.zerohour.data.DatabaseHolder
+import com.shanetalkstech.zerohour.data.explanation
 import com.shanetalkstech.zerohour.data.nowText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.zerohour_ffi.ColorSlot
+import uniffi.zerohour_ffi.Database
 import uniffi.zerohour_ffi.FfiException
+import uniffi.zerohour_ffi.ItemForm
 import uniffi.zerohour_ffi.LayoutMode
 import uniffi.zerohour_ffi.MainScreen
 
@@ -72,13 +78,31 @@ private sealed interface LoadState {
 }
 
 /**
- * The main screen (read-only for now): the frame with the app name and the
- * date, the banner and tagline, and the Tasks and Events boxes.
+ * A message in the bottom border of the main screen ("Added "Call mum"").
+ * [isError] draws it in the danger colour instead of the "ok" colour, as in
+ * the terminal app.
+ */
+private data class Status(val text: String, val isError: Boolean = false)
+
+/**
+ * The add/edit form while it is open: the Rust-side [form] object, and
+ * whether it was opened to add (start at "Task or Event?") or to edit.
+ */
+private data class OpenForm(val form: ItemForm, val adding: Boolean)
+
+/**
+ * The app's one route: the main screen (the frame with the app name and the
+ * date, the banner and tagline, and the Tasks and Events boxes), or the
+ * add/edit form in its place while one is open.
  *
  * It works out how many character columns and rows fit on the screen, asks the
  * Rust side for the content (on a background thread), and draws it. The
  * content is fetched again at the start of every minute, so "in 3h" and the
- * countdowns stay current while the app is open.
+ * countdowns stay current while the app is open, and straight after anything
+ * changes.
+ *
+ * Touch: "+ add" in the bottom border opens a new form; one tap on a line
+ * opens it for editing.
  */
 @Composable
 fun MainRoute() {
@@ -91,6 +115,41 @@ fun MainRoute() {
     // redraws whatever read it. `by` lets us read and write it like a plain
     // variable; `remember` keeps it across redraws.
     var state by remember { mutableStateOf<LoadState>(LoadState.Loading) }
+    // Bumped after every change to the data, which makes the loading loop
+    // below start over and read the new content at once.
+    var reloads by remember { mutableIntStateOf(0) }
+    var status by remember { mutableStateOf<Status?>(null) }
+    var openForm by remember { mutableStateOf<OpenForm?>(null) }
+    // Runs the Rust calls that change things; they end when the screen goes.
+    val scope = rememberCoroutineScope()
+
+    // Runs [action] against the database on a background thread, then shows
+    // the status text it returns (if any) and reloads the screen. A failure
+    // shows Rust's explanation instead, in the danger colour.
+    fun runChange(action: (Database) -> String?) {
+        scope.launch {
+            status = try {
+                withContext(Dispatchers.IO) { action(DatabaseHolder.get(context)) }?.let { Status(it) }
+            } catch (e: FfiException) {
+                Status(e.explanation(), isError = true)
+            }
+            reloads++
+        }
+    }
+
+    // Opens a form made by [make] (a new one, or one filled in from an item).
+    fun openFormWith(adding: Boolean, make: (Database) -> ItemForm) {
+        status = null
+        scope.launch {
+            try {
+                val form = withContext(Dispatchers.IO) { make(DatabaseHolder.get(context)) }
+                openForm = OpenForm(form, adding)
+            } catch (e: FfiException) {
+                status = Status(e.explanation(), isError = true)
+                reloads++
+            }
+        }
+    }
 
     // The theme colours: the saved theme once loaded, the default before.
     val palette = (state as? LoadState.Loaded)?.screen?.settings?.theme?.colors
@@ -119,9 +178,9 @@ fun MainRoute() {
             val narrow = columns < NARROW_COLUMNS
 
             // Runs when this screen appears, and again if `narrow` changes
-            // (the phone is turned). It is cancelled when the screen goes away,
-            // which also ends the loop.
-            LaunchedEffect(narrow) {
+            // (the phone is turned) or something was changed (`reloads`). It
+            // is cancelled when the screen goes away, which also ends the loop.
+            LaunchedEffect(narrow, reloads) {
                 while (true) {
                     state = load(context, narrow)
                     delay(millisUntilNextMinute())
@@ -130,10 +189,38 @@ fun MainRoute() {
 
             // `val s = state` takes one snapshot, so the branches below all see
             // the same value (and Kotlin can tell which case it is).
+            val form = openForm
             when (val s = state) {
                 LoadState.Loading -> MessageScreen(look, stringResource(R.string.loading), ColorSlot.MUTED)
                 is LoadState.Failed -> MessageScreen(look, s.message, ColorSlot.DANGER)
-                is LoadState.Loaded -> MainScreenContent(look, s.screen, columns, rows, narrow)
+                is LoadState.Loaded -> if (form != null) {
+                    // The form takes the whole screen until it closes. Its
+                    // Rust object is freed by the garbage collector once
+                    // nothing refers to it.
+                    FormScreen(
+                        look = look,
+                        form = form.form,
+                        chooseKindFirst = form.adding,
+                        taskIcon = s.screen.taskIcon,
+                        eventIcon = s.screen.eventIcon,
+                        onClose = { message ->
+                            openForm = null
+                            status = message?.let { Status(it) }
+                            reloads++
+                        },
+                    )
+                } else {
+                    MainScreenContent(
+                        look = look,
+                        screen = s.screen,
+                        columns = columns,
+                        rows = rows,
+                        narrow = narrow,
+                        status = status,
+                        onAdd = { openFormWith(adding = true) { it.newForm() } },
+                        onEdit = { id -> openFormWith(adding = false) { it.editForm(id) } },
+                    )
+                }
             }
         }
     }
@@ -149,12 +236,7 @@ private suspend fun load(context: Context, narrow: Boolean): LoadState =
         try {
             LoadState.Loaded(DatabaseHolder.get(context).mainScreen(nowText(), narrow))
         } catch (e: FfiException) {
-            // The Rust error's explanation, per kind of error.
-            val detail = when (e) {
-                is FfiException.Database -> e.detail
-                is FfiException.InvalidInput -> e.detail
-            }
-            LoadState.Failed(detail)
+            LoadState.Failed(e.explanation())
         }
     }
 
@@ -177,10 +259,12 @@ private fun millisUntilNextMinute(): Long {
  * │╭ ◷ Events (5) ──────────────────────╮│
  * ││ ◷ Lake trip                  5d    ││
  * │╰────────────────────────────────────╯│
- * ╰──────────────────────────────────────╯
+ * ╰─ Added "Call mum" ─────────── + add ─╯
  * ```
  *
  * [columns] and [rows] are how many character cells fit on the screen.
+ * [status] is the message for the bottom border, if any. [onAdd] runs when
+ * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID).
  */
 @Composable
 private fun MainScreenContent(
@@ -189,6 +273,9 @@ private fun MainScreenContent(
     columns: Int,
     rows: Int,
     narrow: Boolean,
+    status: Status?,
+    onAdd: () -> Unit,
+    onEdit: (String) -> Unit,
 ) {
     val settings = screen.settings
     // The banner needs: the setting on, room for its letters inside the frame
@@ -207,6 +294,17 @@ private fun MainScreenContent(
             " ${screen.today} ",
             SpanStyle(color = look.color(ColorSlot.MUTED)),
         ),
+        bottomTitle = status?.let {
+            AnnotatedString(
+                " ${it.text} ",
+                SpanStyle(color = look.color(if (it.isError) ColorSlot.DANGER else ColorSlot.OK)),
+            )
+        },
+        bottomRightTitle = AnnotatedString(
+            stringResource(R.string.add_button),
+            SpanStyle(color = look.color(ColorSlot.ACCENT), fontWeight = FontWeight.Bold),
+        ),
+        onBottomRightClick = onAdd,
         paddingCells = 0,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -234,6 +332,7 @@ private fun MainScreenContent(
                 taskIcon = screen.taskIcon,
                 narrow = narrow,
                 showDates = columns >= DATE_COLUMNS,
+                onEdit = onEdit,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -244,6 +343,7 @@ private fun MainScreenContent(
                 eventIcon = screen.eventIcon,
                 narrow = narrow,
                 showDates = columns >= DATE_COLUMNS,
+                onEdit = onEdit,
                 modifier = eventsModifier.fillMaxWidth(),
             )
         }

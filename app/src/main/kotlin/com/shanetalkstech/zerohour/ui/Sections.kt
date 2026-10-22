@@ -1,6 +1,8 @@
 package com.shanetalkstech.zerohour.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,6 +59,9 @@ private const val REPEAT_CELLS = 17
  * - [taskIcon]: the marker icon for the chosen icon mode.
  * - [narrow]: true on screens under 60 columns (short texts, fewer columns).
  * - [showDates]: true on screens 90 columns or wider (adds the date column).
+ * - [onEdit]: one tap on a line, with the task's ID (opens it for editing).
+ *   The marker in front of each line is only a picture of a checkbox:
+ *   tapping it edits too, it does not tick the task off.
  * - [modifier]: decides the box's size (the caller shares the height out).
  */
 @Composable
@@ -66,6 +71,7 @@ fun TasksBox(
     taskIcon: String,
     narrow: Boolean,
     showDates: Boolean,
+    onEdit: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val sectionColor = look.color(ColorSlot.TASK)
@@ -90,7 +96,7 @@ fun TasksBox(
             // which line is which, so lines keep their identity on refresh.
             LazyColumn {
                 items(tasks, key = { it.id }) { task ->
-                    ListLine(look) {
+                    ListLine(look, onClick = { onEdit(task.id) }) {
                         CellText(look, taskIcon, sectionColor, markerCells)
                         Gap(look)
                         CellText(look, task.priorityIcon, look.color(task.prioritySlot), priorityCells)
@@ -120,7 +126,8 @@ fun TasksBox(
 
 /**
  * The Events box: the visible events with their countdowns, already sorted
- * soonest first by core. The parameters mean the same as for [TasksBox].
+ * soonest first by core. The parameters mean the same as for [TasksBox]
+ * ([onEdit] gets the event's ID).
  */
 @Composable
 fun EventsBox(
@@ -129,6 +136,7 @@ fun EventsBox(
     eventIcon: String,
     narrow: Boolean,
     showDates: Boolean,
+    onEdit: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val sectionColor = look.color(ColorSlot.EVENT)
@@ -149,7 +157,7 @@ fun EventsBox(
 
             LazyColumn {
                 items(events, key = { it.id }) { event ->
-                    ListLine(look) {
+                    ListLine(look, onClick = { onEdit(event.id) }) {
                         CellText(look, eventIcon, sectionColor, markerCells)
                         Gap(look)
                         TitleText(look, event.title, look.color(ColorSlot.FOREGROUND))
@@ -212,15 +220,17 @@ private fun sectionTitle(
 
 /**
  * One list line: a row of cells, [LINE_ROWS] character rows tall, with its
- * contents centred vertically. `RowScope.()` lets the contents use
- * `Modifier.weight`, which [TitleText] needs.
+ * contents centred vertically, that runs [onClick] when tapped.
+ * `RowScope.()` lets the contents use `Modifier.weight`, which [TitleText]
+ * needs.
  */
 @Composable
-private fun ListLine(look: TuiLook, content: @Composable RowScope.() -> Unit) {
+private fun ListLine(look: TuiLook, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(look.cell.rows(LINE_ROWS)),
+            .height(look.cell.rows(LINE_ROWS))
+            .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )

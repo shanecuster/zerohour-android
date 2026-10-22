@@ -20,4 +20,45 @@
     <string name="loading">Loading…</string>
     <!-- Title of the box that explains why the database could not be read. -->
     <string name="error_title">" error "</string>
+
+    <!--
+      The add/edit form. These words are the terminal app's (tui/src/ui/add.rs
+      and calendar.rs in the zerohour repo), which keeps them in its own code
+      rather than in core, so the phone's copy lives here. Field labels,
+      previews and validation messages DO come from core.
+    -->
+    <!-- In the bottom border of the main screen; tapping it adds an item. -->
+    <string name="add_button">" + add "</string>
+    <!-- Box titles. -->
+    <string name="form_add">Add</string>
+    <string name="form_new_task">New task</string>
+    <string name="form_new_event">New event</string>
+    <string name="form_edit_task">Edit task</string>
+    <string name="form_edit_event">Edit event</string>
+    <!-- The "Task or Event?" step, each with its one-line explanation. -->
+    <string name="kind_task">Task</string>
+    <string name="kind_task_hint">Something to do, optionally with a due date.</string>
+    <string name="kind_event">Event</string>
+    <string name="kind_event_hint">A date to count down to, like a birthday or holiday.</string>
+    <!-- An empty date or time field. -->
+    <string name="none_placeholder">(none)</string>
+    <!-- After the keep-after-pass checkbox (one-off events). -->
+    <string name="keep_after_pass">show after the date passes</string>
+    <!-- Under the date field: opens the month-grid picker. -->
+    <string name="open_calendar">[ calendar ]</string>
+    <string name="save_button">[ save ]</string>
+    <string name="cancel_button">[ cancel ]</string>
+    <!-- The calendar picker. %1$s is the first weekday now, e.g. "Su". -->
+    <string name="calendar_prev">‹ prev</string>
+    <string name="calendar_next">next ›</string>
+    <string name="calendar_today">today</string>
+    <string name="calendar_week_start">week: %1$s</string>
+    <string name="cancel">cancel</string>
+
+    <!--
+      Status messages, in the bottom border of the main screen (the terminal
+      app's words, from its tui/src/app.rs). %1$s is the item's title.
+    -->
+    <string name="status_added">Added \"%1$s\"</string>
+    <string name="status_saved">Saved \"%1$s\"</string>
 </resources>

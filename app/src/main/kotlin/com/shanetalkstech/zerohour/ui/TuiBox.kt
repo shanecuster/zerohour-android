@@ -1,8 +1,10 @@
 package com.shanetalkstech.zerohour.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -39,6 +41,10 @@ import uniffi.zerohour_ffi.ColorSlot
  *   right, already coloured by the caller. Each is drawn on the background
  *   colour, so it "cuts" the line. Like the terminal app's titles, they start
  *   and end with a space so there is a gap on both sides.
+ * - [bottomTitle] and [bottomRightTitle]: the same on the bottom edge (the
+ *   terminal app shows its status message there). [onBottomRightClick] makes
+ *   the bottom-right title tappable (the main screen's "+ add"). A bottom
+ *   title too long for the space left of the right one ends in "…".
  * - [paddingCells]: blank columns between the border and the content (the
  *   terminal app uses 1 for the Tasks and Events boxes, 0 for the outer frame).
  * - [content]: what goes inside. `BoxScope.()` means it is placed inside a
@@ -51,6 +57,9 @@ fun TuiBox(
     modifier: Modifier = Modifier,
     title: AnnotatedString? = null,
     rightTitle: AnnotatedString? = null,
+    bottomTitle: AnnotatedString? = null,
+    bottomRightTitle: AnnotatedString? = null,
+    onBottomRightClick: (() -> Unit)? = null,
     paddingCells: Int = 1,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -98,6 +107,46 @@ fun TuiBox(
                     .align(Alignment.TopEnd)
                     .padding(end = cell.columns(1))
                     .background(background),
+            )
+        }
+
+        // The bottom edge, the same way. The left title may only use the
+        // width the right one leaves free (plus a cell of border between).
+        val rightCells = bottomRightTitle?.let { cellCount(it.text) + 1 } ?: 0
+        if (bottomTitle != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(start = cell.columns(1), end = cell.columns(1 + rightCells)),
+            ) {
+                BasicText(
+                    text = bottomTitle,
+                    style = look.text,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.background(background),
+                )
+            }
+        }
+        if (bottomRightTitle != null) {
+            // `then` adds the click handler only when there is one.
+            val tap = if (onBottomRightClick != null) {
+                Modifier.clickable(onClick = onBottomRightClick)
+            } else {
+                Modifier
+            }
+            BasicText(
+                text = bottomRightTitle,
+                style = look.text,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = cell.columns(1))
+                    .background(background)
+                    .then(tap),
             )
         }
     }
