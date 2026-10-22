@@ -1390,6 +1390,7 @@ dependencies = [
 name = "zerohour-ffi"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "uniffi",
  "zerohour-core",
 ]

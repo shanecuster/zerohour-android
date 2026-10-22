@@ -29,7 +29,7 @@ zerohour-core = { git = "https://github.com/shanecuster/zerohour",
 - Gradle: `settings.gradle.kts`, root `build.gradle.kts`, `gradle.properties`, the Gradle 9.6.0 wrapper with its sha256.
 - `app/build.gradle.kts`: NDK 30.0.16248370, build-tools 36.0.0, ABI handling, signing from a git-ignored `keystore.properties` (or environment variables), `.debug` suffix on debug builds, R8 off, `preBuild` runs `buildRust`.
 - `scripts/build-rust.sh` (cargo-ndk 4.1.2, `--locked`, bindgen from the host build) and `rust/rust-toolchain.toml` (Rust 1.97.0 and the Android targets).
-- `rust/uniffi-bindgen/`, `.gitignore`, `third_party/fonts/` (JetBrains Mono Nerd Font Mono with its OFL license and sha256 file).
+- `rust/uniffi-bindgen/`, `.gitignore`, and the layout of `third_party/fonts/` (OFL licence, README with sha256). Note: tuxwire bundles *plain* JetBrains Mono, so zerohour's JetBrainsMono Nerd Font Mono 3.5.1 comes from the official Nerd Fonts release instead (provenance in `third_party/fonts/README.md`).
 - The AES-GCM password store pattern from `SyncSettings.kt`: adapt it, don't copy it.
 
 ## Change from tuxwire-android
@@ -103,4 +103,6 @@ Step 1 is committed on `master` this one time. Every later step is a feature bra
 ## Status
 
 - Core refactor (`view.rs`, `form.rs`) and the demo seeder are merged and pushed in `~/Projects/zerohour`; the pinned hash above is current.
-- Repo created, empty, with the remote set. Next: steps 1 to 3, then stop.
+- Steps 1 to 3 are done, merged into `master` and pushed. The skeleton app was tested by the owner on the emulator. Core is pinned at `87255bf`.
+- Steps 4 and 5 are built on `feature/main-screen` (not merged): FFI `Database` (file or in-memory demo), `display_settings`, `main_screen`; the bundled Nerd Font; the read-only main screen. Decisions made with the owner: `chrono` is a direct dependency of `zerohour-ffi` (core's own version, no new crate), for `chrono::Local` and parsing "now"; the font comes from the Nerd Fonts v3.5.1 release; the icon mode defaults to Nerd when nothing is saved. Core is still pinned at `87255bf`.
+- Next: the owner tests steps 4 and 5 on the emulator. Then step 6.

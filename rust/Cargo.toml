@@ -42,6 +42,14 @@ resolver = "3"
 # README. It is never committed, so committed builds always use this commit.
 zerohour-core = { git = "https://github.com/shanecuster/zerohour", rev = "87255bf5396dbf552ee107a63b882d14efcb7eda", default-features = false, features = ["sync"] }
 
+# Dates and times. zerohour-core already uses chrono 0.4 (so this adds no new
+# crate to Cargo.lock); the glue names it directly for two things core asks its
+# callers to supply: the local time zone (`chrono::Local`, which core's demo
+# seeder needs to turn local times into UTC timestamps) and parsing the "now"
+# that Kotlin sends across as an ISO text. The version range matches core's, so
+# both always resolve to the same single copy.
+chrono = "0.4"
+
 # UniFFI: Mozilla's tool that generates the Kotlin <-> Rust bridge code so we
 # never have to write JNI (Java's low-level native interface) by hand.
 uniffi = "0.32.2"

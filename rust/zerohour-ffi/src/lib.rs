@@ -16,16 +16,19 @@
 //!
 //! ## What is exported (so far)
 //!
-//! This is the first slice of the bridge (plan step 2): just the pure data the
-//! skeleton app needs to prove the Rust library loads and runs.
-//!
 //! * **Theme palettes** (`list_themes`, `default_theme_name`) -- the same named
 //!   colours as the terminal app, read straight from `zerohour_core::theme`.
 //! * **The build version** (`core_version`) -- shown on screen so it is obvious
 //!   which Rust build is running.
+//! * **The database** (`database` module) -- open the real database file or
+//!   the in-memory demo, and read the display settings stored in it.
+//! * **The main screen** (`screen` module) -- `Database::main_screen` returns
+//!   the sorted Tasks and Events lines, their texts and colour slots, the
+//!   icons, the banner and the tagline, all decided by core.
+//! * **Errors** (`error` module) -- the one `FfiError` type Kotlin catches.
 //!
-//! Later steps add the database, the view model and sync. All the real logic
-//! lives in `zerohour-core`; the functions here are thin.
+//! Later steps add editing and sync. All the real logic lives in
+//! `zerohour-core`; the functions here are thin.
 //!
 //! ## Why mirror types instead of exporting core's types directly?
 //!
@@ -39,6 +42,12 @@
 // entry points the Kotlin side calls through). It must appear exactly once, at
 // the crate root, before the other exports are used.
 uniffi::setup_scaffolding!();
+
+// Each `pub mod x;` pulls in the file `src/x.rs`. They are `pub` so their
+// exported types are part of this crate's public surface.
+pub mod database;
+pub mod error;
+pub mod screen;
 
 use zerohour_core::theme::{DEFAULT_THEME, Rgb, THEMES, Theme};
 
@@ -138,6 +147,17 @@ pub struct ThemeInfo {
     pub colors: ThemePalette,
 }
 
+/// Converts one of core's themes into the name-plus-colours record.
+impl From<&Theme> for ThemeInfo {
+    /// Copies the name and converts the palette slot by slot.
+    fn from(theme: &Theme) -> ThemeInfo {
+        ThemeInfo {
+            name: theme.name.to_string(),
+            colors: ThemePalette::from(theme),
+        }
+    }
+}
+
 /// Every built-in theme, in the same order as the terminal app's picker (the
 /// order of core's `THEMES` table, with the default theme first) -- the same
 /// palettes in the same order, because both apps read that one table in
@@ -146,13 +166,7 @@ pub struct ThemeInfo {
 pub fn list_themes() -> Vec<ThemeInfo> {
     // `iter()` walks the themes by reference; `map` turns each into a
     // `ThemeInfo`; `collect` gathers them into the `Vec` Kotlin receives.
-    THEMES
-        .iter()
-        .map(|theme| ThemeInfo {
-            name: theme.name.to_string(),
-            colors: ThemePalette::from(theme),
-        })
-        .collect()
+    THEMES.iter().map(ThemeInfo::from).collect()
 }
 
 /// The name of the theme used when the user has not chosen one yet.
