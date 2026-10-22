@@ -103,4 +103,5 @@ Step 1 is committed on `master` this one time. Every later step is a feature bra
 ## Status
 
 - Core refactor (`view.rs`, `form.rs`) and the demo seeder are merged and pushed in `~/Projects/zerohour`; the pinned hash above is current.
-- Repo created, empty, with the remote set. Next: steps 1 to 3, then stop.
+- Steps 1 to 3 are done, merged into `master` and pushed. The skeleton app was tested by the owner on the emulator. Core is pinned at `87255bf`.
+- Next: steps 4 and 5 on the branch `feature/main-screen`, then stop for the owner to test.
