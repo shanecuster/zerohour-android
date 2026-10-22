@@ -166,5 +166,6 @@ cargo fmt --check
 
 ## Licence
 
-MIT. The bundled font is JetBrains Mono (unmodified) under the SIL OFL 1.1; see
+MIT. The bundled font is JetBrainsMono Nerd Font Mono 3.5.1 (unmodified) under
+the SIL OFL 1.1, and the Font Awesome icons it carries are CC BY 4.0; see
 `third_party/fonts/`.
