@@ -29,6 +29,10 @@ crate-type = ["cdylib", "lib"]
 # The shared engine (pinned to one exact commit in ../Cargo.toml).
 zerohour-core.workspace = true
 
+# Dates and times: the local time zone for the demo seeder, and parsing the ISO
+# date-time text Kotlin passes in (see ../Cargo.toml for why it is needed).
+chrono.workspace = true
+
 # UniFFI generates the Kotlin <-> Rust bridge from the `#[uniffi::export]`
 # items in src/lib.rs. No extra features are needed: there are no async exports.
 uniffi.workspace = true
