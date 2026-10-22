@@ -170,6 +170,8 @@ pub struct MainScreen {
     pub event_icon: String,
     /// The stats icon (the tab bar's Stats tab).
     pub stats_icon: String,
+    /// The settings icon (the gear in the header that opens settings).
+    pub settings_icon: String,
     /// The open tasks, already sorted for the screen.
     pub tasks: Vec<TaskRow>,
     /// The visible events, already sorted soonest first.
@@ -261,6 +263,7 @@ impl Database {
             task_icon: Icon::Task.get(mode).to_string(),
             event_icon: Icon::Event.get(mode).to_string(),
             stats_icon: Icon::Stats.get(mode).to_string(),
+            settings_icon: Icon::Settings.get(mode).to_string(),
             tasks,
             events,
         })
@@ -364,6 +367,7 @@ mod tests {
         assert_eq!(screen.task_icon, "[ ]");
         assert_eq!(screen.event_icon, "(o)");
         assert_eq!(screen.stats_icon, "#");
+        assert_eq!(screen.settings_icon, "*");
         // ASCII mode uses the 4-row ASCII letters.
         assert_eq!(screen.banner.lines.len(), 4);
         // A fresh database has nothing in it, and the tagline is the date.

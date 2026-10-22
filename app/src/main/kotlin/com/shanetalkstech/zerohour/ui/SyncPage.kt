@@ -1,0 +1,418 @@
+package com.shanetalkstech.zerohour.ui
+
+import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import com.shanetalkstech.zerohour.R
+import com.shanetalkstech.zerohour.data.DatabaseHolder
+import com.shanetalkstech.zerohour.data.PasswordStore
+import com.shanetalkstech.zerohour.data.SavedPassword
+import com.shanetalkstech.zerohour.data.explanation
+import com.shanetalkstech.zerohour.data.nowText
+import kotlin.math.abs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import uniffi.zerohour_ffi.ColorSlot
+import uniffi.zerohour_ffi.FfiException
+import uniffi.zerohour_ffi.SyncConfig
+import uniffi.zerohour_ffi.syncAccount
+
+/** The labels in front of the fields are padded to this many cells ("Server URL"). */
+private const val LABEL_CELLS = 10
+
+/** A message under the buttons, in the "ok", "warn" or danger colour ([slot]). */
+private data class SyncMessage(val text: String, val slot: ColorSlot)
+
+/**
+ * The sync settings page, opened from "Sync ›" in settings. It follows the
+ * terminal app's sync popup (`c`):
+ *
+ * ```
+ * ╭ Sync ────────────────────────────────╮
+ * │   Sync       ‹ off ›                 │
+ * │   Server URL https://...             │
+ * │   Database   notes                   │
+ * │   Username   someone                 │
+ * │   Password   (saved)                 │
+ * │                                      │
+ * │ [ save ]                             │
+ * │ [ test connection ]                  │
+ * │ [ reset sync state… ]                │
+ * │ [ close ]                            │
+ * │                                      │
+ * │ Password: saved, encrypted with ...  │
+ * │ Documents synced: 0                  │
+ * │ Connected. The database has 12 ...   │
+ * ╰──────────────────────────────────────╯
+ * ```
+ *
+ * The rules, as in the terminal app:
+ *
+ * - The password box starts empty. Leaving it empty keeps the saved
+ *   password; typing one replaces it when Save is tapped. What is typed is
+ *   always drawn as dots, and is never shown, logged or put in a message.
+ * - "Test connection" uses the details as typed (saved or not), with the
+ *   typed password, or the saved one when the box is empty.
+ * - Only `https://` addresses are accepted: the Rust side refuses anything
+ *   else before saving or testing, with a message here.
+ * - A saved password that can no longer be decrypted is removed, and the
+ *   page asks for it again instead of failing.
+ *
+ * "Sync now" comes in the next step; this page only stores the details.
+ * While the demo database is in use, everything is greyed out (the demo
+ * never syncs). [onClose] closes the page (the back gesture does too).
+ */
+@Composable
+fun SyncPage(look: TuiLook, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
+    // The form's fields. The password is only what is typed now; the saved
+    // one is read when it is needed and never put into a field.
+    var enabled by remember { mutableStateOf(false) }
+    var url by remember { mutableStateOf("") }
+    var database by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var typedPassword by remember { mutableStateOf("") }
+
+    var loaded by remember { mutableStateOf(false) }
+    var demo by remember { mutableStateOf(false) }
+    var syncedDocs by remember { mutableStateOf(0uL) }
+    // Whether a password is saved for the details as they were last saved.
+    var passwordSaved by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<SyncMessage?>(null) }
+    var clockWarning by remember { mutableStateOf<String?>(null) }
+    var confirmReset by remember { mutableStateOf(false) }
+    // True while a save, test or reset runs, so a second tap does nothing.
+    var busy by remember { mutableStateOf(false) }
+    // Bumped to read the saved state again (after a save or a reset).
+    var version by remember { mutableIntStateOf(0) }
+
+    // The details as typed, for the Rust side.
+    fun config() = SyncConfig(enabled = enabled, url = url, database = database, username = username)
+
+    // Texts used inside the background jobs below, read here because
+    // `stringResource` only works while drawing.
+    val enterAgain = stringResource(R.string.sync_password_unreadable)
+
+    BackHandler {
+        if (confirmReset) confirmReset = false else onClose()
+    }
+
+    // Reads the saved details (and whether a password is saved for them) on
+    // a background thread when the page opens and after a save or reset.
+    LaunchedEffect(version) {
+        try {
+            val (screen, saved) = withContext(Dispatchers.IO) {
+                val s = DatabaseHolder.get(context).syncScreen()
+                s to PasswordStore.load(context, syncAccount(s.config))
+            }
+            if (!loaded) {
+                enabled = screen.config.enabled
+                url = screen.config.url
+                database = screen.config.database
+                username = screen.config.username
+                loaded = true
+            }
+            demo = screen.demo
+            syncedDocs = screen.syncedDocs
+            passwordSaved = saved is SavedPassword.Found
+            if (saved is SavedPassword.Unreadable) message = SyncMessage(enterAgain, ColorSlot.WARN)
+        } catch (e: FfiException) {
+            message = SyncMessage(e.explanation(), ColorSlot.DANGER)
+        }
+    }
+
+    // Runs [action] on a background thread unless something is already
+    // running. It returns the message to show; a Rust error shows its
+    // explanation in the danger colour instead.
+    fun runJob(action: suspend () -> SyncMessage) {
+        if (busy) return
+        busy = true
+        focusManager.clearFocus()
+        scope.launch {
+            message = try {
+                withContext(Dispatchers.IO) { action() }
+            } catch (e: FfiException) {
+                SyncMessage(e.explanation(), ColorSlot.DANGER)
+            }
+            busy = false
+            version++
+        }
+    }
+
+    val savedText = stringResource(R.string.sync_saved)
+    val savedOffText = stringResource(R.string.sync_saved_off)
+    val testingText = stringResource(R.string.sync_testing)
+    val resetDoneText = stringResource(R.string.sync_reset_done)
+
+    // Save: the details first (the Rust side checks them, https only), then
+    // the typed password, under the account name of the details just saved.
+    fun save() = runJob {
+        val details = config()
+        DatabaseHolder.get(context).saveSyncSettings(details)
+        if (typedPassword.isNotEmpty()) {
+            PasswordStore.save(context, syncAccount(details), typedPassword)
+            typedPassword = ""
+        }
+        SyncMessage(if (details.enabled) savedText else savedOffText, ColorSlot.OK)
+    }
+
+    // Test: the typed password, or the saved one for these details.
+    fun test() {
+        message = SyncMessage(testingText, ColorSlot.MUTED)
+        clockWarning = null
+        runJob {
+            val details = config()
+            val password = typedPassword.ifEmpty {
+                when (val saved = PasswordStore.load(context, syncAccount(details))) {
+                    is SavedPassword.Found -> saved.password
+                    // An empty password makes the Rust side say "enter the password".
+                    SavedPassword.None -> ""
+                    SavedPassword.Unreadable -> return@runJob SyncMessage(enterAgain, ColorSlot.WARN)
+                }
+            }
+            val result = DatabaseHolder.get(context).testConnection(details, password, nowText())
+            clockWarning = result.clockSkewSecs?.let { skewText(context, it) }
+            SyncMessage(
+                context.getString(R.string.sync_connected, result.docCount.toString()),
+                ColorSlot.OK,
+            )
+        }
+    }
+
+    val muted = look.color(ColorSlot.MUTED)
+    val accent = look.color(ColorSlot.ACCENT)
+    val foreground = look.color(ColorSlot.FOREGROUND)
+    TuiBox(
+        look = look,
+        borderColor = accent,
+        modifier = Modifier.fillMaxSize(),
+        title = AnnotatedString(
+            " ${stringResource(R.string.sync_title)} ",
+            SpanStyle(color = accent, fontWeight = FontWeight.Bold),
+        ),
+    ) {
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            if (!loaded) return@Column
+            if (demo) {
+                // Greyed out: nothing here can be used with the demo.
+                MutedText(look, stringResource(R.string.sync_demo_note))
+                Spacer(Modifier.height(look.cell.rows(1)))
+                TapText(look, stringResource(R.string.close_button), muted, onClick = onClose)
+                return@Column
+            }
+
+            // The on/off switch, in the settings page's ‹ value › style.
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = look.cell.rows(LINE_ROWS)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BasicText(
+                    text = "  " + stringResource(R.string.sync_enabled).padEnd(LABEL_CELLS) + " ",
+                    style = look.text.copy(color = muted),
+                )
+                TapText(look, "‹ ", accent, onClick = { enabled = !enabled }, largeTarget = true)
+                BasicText(
+                    text = stringResource(if (enabled) R.string.value_on else R.string.value_off),
+                    style = look.text.copy(color = foreground),
+                )
+                TapText(look, " › ", accent, onClick = { enabled = !enabled }, largeTarget = true)
+            }
+            SyncField(look, stringResource(R.string.sync_url), url, { url = it }, FieldKind.URL)
+            SyncField(look, stringResource(R.string.sync_database), database, { database = it }, FieldKind.PLAIN)
+            SyncField(look, stringResource(R.string.sync_username), username, { username = it }, FieldKind.PLAIN)
+            SyncField(
+                look,
+                stringResource(R.string.sync_password),
+                typedPassword,
+                { typedPassword = it },
+                FieldKind.PASSWORD,
+                placeholder = stringResource(if (passwordSaved) R.string.sync_password_kept else R.string.none_placeholder),
+            )
+            Spacer(Modifier.height(look.cell.rows(1)))
+
+            if (confirmReset) {
+                // The terminal app's question, with buttons for its y and n.
+                BasicText(
+                    text = stringResource(R.string.sync_reset_question),
+                    style = look.text.copy(color = look.color(ColorSlot.WARN)),
+                )
+                Row {
+                    TapText(
+                        look,
+                        stringResource(R.string.sync_reset_yes),
+                        look.color(ColorSlot.WARN),
+                        bold = true,
+                        onClick = {
+                            confirmReset = false
+                            runJob {
+                                DatabaseHolder.get(context).resetSyncState()
+                                SyncMessage(resetDoneText, ColorSlot.OK)
+                            }
+                        },
+                    )
+                    Spacer(Modifier.width(look.cell.columns(2)))
+                    TapText(look, stringResource(R.string.cancel_button), foreground, onClick = { confirmReset = false })
+                }
+            } else {
+                TapText(look, stringResource(R.string.save_button), accent, onClick = ::save, bold = true)
+                TapText(look, stringResource(R.string.sync_test_button), foreground, onClick = ::test)
+                TapText(
+                    look,
+                    stringResource(R.string.sync_reset_button),
+                    foreground,
+                    onClick = {
+                        message = null
+                        confirmReset = true
+                    },
+                )
+                TapText(look, stringResource(R.string.close_button), muted, onClick = onClose)
+            }
+            Spacer(Modifier.height(look.cell.rows(1)))
+
+            // Where the password is, and what has been synced.
+            MutedText(
+                look,
+                stringResource(if (passwordSaved) R.string.sync_password_saved_info else R.string.sync_password_none_info),
+            )
+            MutedText(look, stringResource(R.string.sync_documents, syncedDocs.toString()))
+            clockWarning?.let {
+                BasicText(text = it, style = look.text.copy(color = look.color(ColorSlot.WARN)))
+            }
+            message?.let {
+                Spacer(Modifier.height(look.cell.rows(1)))
+                BasicText(text = it.text, style = look.text.copy(color = look.color(it.slot)))
+            }
+        }
+    }
+}
+
+/** What a [SyncField] holds, which decides its keyboard and how it is drawn. */
+private enum class FieldKind {
+    /** A web address: the URL keyboard, no autocorrect. */
+    URL,
+
+    /** A name: no autocorrect and no capital letters added. */
+    PLAIN,
+
+    /** The password: the password keyboard, drawn as dots. */
+    PASSWORD,
+}
+
+/**
+ * One text field: "  Label      value", like the form's. The value is a
+ * single line in the theme's text colour with an accent cursor; when it is
+ * empty and not being typed in, [placeholder] shows muted.
+ */
+@Composable
+private fun SyncField(
+    look: TuiLook,
+    label: String,
+    value: String,
+    onValue: (String) -> Unit,
+    kind: FieldKind,
+    placeholder: String? = null,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val keyboard = when (kind) {
+        FieldKind.URL -> KeyboardOptions(
+            autoCorrectEnabled = false,
+            keyboardType = KeyboardType.Uri,
+            imeAction = ImeAction.Next,
+        )
+        FieldKind.PLAIN -> KeyboardOptions(
+            capitalization = KeyboardCapitalization.None,
+            autoCorrectEnabled = false,
+            keyboardType = KeyboardType.Ascii,
+            imeAction = ImeAction.Next,
+        )
+        FieldKind.PASSWORD -> KeyboardOptions(
+            autoCorrectEnabled = false,
+            keyboardType = KeyboardType.Password,
+            imeAction = ImeAction.Done,
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = look.cell.rows(LINE_ROWS)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicText(
+            text = "  " + label.padEnd(LABEL_CELLS) + " ",
+            style = look.text.copy(color = look.color(if (focused) ColorSlot.ACCENT else ColorSlot.MUTED)),
+        )
+        BasicTextField(
+            value = value,
+            onValueChange = onValue,
+            singleLine = true,
+            textStyle = look.text.copy(color = look.color(ColorSlot.FOREGROUND)),
+            cursorBrush = SolidColor(look.color(ColorSlot.ACCENT)),
+            keyboardOptions = keyboard,
+            // Dots for the password, so it is never on screen.
+            visualTransformation = if (kind == FieldKind.PASSWORD) {
+                PasswordVisualTransformation()
+            } else {
+                VisualTransformation.None
+            },
+            modifier = Modifier
+                .weight(1f)
+                .onFocusChanged { focused = it.isFocused },
+            decorationBox = { innerTextField ->
+                Box {
+                    if (placeholder != null && value.isEmpty() && !focused) {
+                        BasicText(text = placeholder, style = look.text.copy(color = look.color(ColorSlot.MUTED)))
+                    }
+                    innerTextField()
+                }
+            },
+        )
+    }
+}
+
+/**
+ * The clock warning after a test, in the terminal app's words: how many
+ * minutes (rounded up) this phone's clock is ahead of or behind the server's.
+ */
+private fun skewText(context: Context, seconds: Long): String {
+    val minutes = (abs(seconds) + 59) / 60
+    val id = if (seconds > 0) R.string.sync_clock_ahead else R.string.sync_clock_behind
+    return context.getString(id, minutes.toString())
+}

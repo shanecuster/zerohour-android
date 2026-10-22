@@ -2,6 +2,7 @@ package com.shanetalkstech.zerohour.data
 
 import android.content.Context
 import com.shanetalkstech.zerohour.BuildConfig
+import java.io.File
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -13,12 +14,17 @@ import uniffi.zerohour_ffi.Database
  * Which database depends on the build:
  *
  * - **Debug builds** (what Android Studio's Run button installs, with the
- *   `.debug` application ID) open core's *demo* database: sample tasks and
- *   events that live only in memory. Nothing is written to the phone and the
- *   demo is never synced, so test data can never reach the real database.
- * - **Release builds** open the real database, `zerohour.db` in the app's
- *   private storage. Android backup is off for the whole app
- *   (`allowBackup="false"` in the manifest), so the file stays on the device.
+ *   `.debug` application ID) open core's *demo* database by default: sample
+ *   tasks and events that live only in memory. Nothing is written to the
+ *   phone and the demo is never synced, so test data can never reach a real
+ *   database. The settings screen's debug-only "Data" row switches to a real
+ *   database file (for trying sync against the `sandbox` database). The
+ *   debug app is a separate app, so that file is its own and never the
+ *   release app's.
+ * - **Release builds** always open the real database, `zerohour.db` in the
+ *   app's private storage. Android backup and device-to-device transfer are
+ *   off for all the app's data (see `res/xml/data_extraction_rules.xml`), so
+ *   the file stays on the device.
  *
  * Kotlin's `object` makes this a *singleton*: one shared instance for the whole
  * app process. Keeping the handle here (instead of inside a screen) means it
@@ -28,6 +34,13 @@ object DatabaseHolder {
 
     /** The database file's name inside the app's private databases folder. */
     private const val FILE_NAME = "zerohour.db"
+
+    /**
+     * The file remembering the debug-only "Data" choice. It exists when the
+     * real database was chosen; no file means the demo (the default). It is
+     * in `noBackupFilesDir`, a folder Android never backs up or transfers.
+     */
+    private const val REAL_DATA_FLAG = "debug-use-real-database"
 
     /** The open database, or null until the first [get]. */
     private var database: Database? = null
@@ -47,13 +60,41 @@ object DatabaseHolder {
         database ?: open(context.applicationContext).also { database = it }
     }
 
-    /** Opens the demo database (debug builds) or the real file (release builds). */
+    /**
+     * True when the demo database is the one in use: in a debug build, unless
+     * the real database was chosen in settings. Release builds never use it.
+     */
+    fun usesDemo(context: Context): Boolean =
+        BuildConfig.DEBUG && !realDataFlag(context).exists()
+
+    /**
+     * Debug builds only: switches between the demo ([demo] true) and the
+     * real database file, remembers the choice, and closes the open database
+     * so the next [get] opens the chosen one. Call it on a background thread,
+     * then reload every screen. Does nothing in a release build.
+     */
+    fun chooseDemo(context: Context, demo: Boolean) = synchronized(this) {
+        if (!BuildConfig.DEBUG) return@synchronized
+        val flag = realDataFlag(context)
+        if (demo) flag.delete() else flag.createNewFile()
+        // `destroy` frees the Rust object. UniFFI waits for any call still
+        // running on it to finish first, so this is safe from any thread.
+        database?.destroy()
+        database = null
+    }
+
+    /** The "real database chosen" flag file (see [REAL_DATA_FLAG]). */
+    private fun realDataFlag(context: Context): File =
+        File(context.applicationContext.noBackupFilesDir, REAL_DATA_FLAG)
+
+    /** Opens the demo database or the real file, as [usesDemo] says. */
     private fun open(context: Context): Database =
-        if (BuildConfig.DEBUG) {
+        if (usesDemo(context)) {
             Database.openDemo(nowText())
         } else {
             // getDatabasePath gives /data/data/<app id>/databases/zerohour.db,
-            // a folder only this app can read. Core creates the folder if needed.
+            // a folder only this app can read. Core creates the file (and the
+            // folder) on first use and brings its tables up to date.
             Database.open(context.getDatabasePath(FILE_NAME).path)
         }
 }

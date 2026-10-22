@@ -28,6 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -106,10 +108,22 @@ private data class OpenForm(val form: ItemForm, val adding: Boolean)
 /** A line swiped left, waiting for "delete" or "keep": its [id] and [title]. */
 private data class PendingDelete(val id: String, val title: String)
 
+/** Which full page is showing: the main screen with its tabs, settings or sync. */
+private enum class Page {
+    /** The main screen (header, the chosen tab, the tab bar). */
+    MAIN,
+
+    /** The settings page, opened with the gear in the header. */
+    SETTINGS,
+
+    /** The sync page, opened from "Sync ›" on the settings page. */
+    SYNC,
+}
+
 /**
  * The app's one route: the main screen (a row with the app name and the date,
- * the banner and tagline, the box of the chosen tab and the tab bar), or the
- * add/edit form in its place while one is open.
+ * the banner and tagline, the box of the chosen tab and the tab bar), or, in
+ * its place, the add/edit form or the settings page while one is open.
  *
  * It works out how many character columns and rows fit on the screen, asks the
  * Rust side for the content (on a background thread), and draws it. The
@@ -144,6 +158,8 @@ fun MainRoute() {
     // the screen (for example after the system language changes), not only
     // across redraws.
     var tab by rememberSaveable { mutableStateOf(Tab.TASKS) }
+    // The page on show; also kept if Android recreates the screen.
+    var page by rememberSaveable { mutableStateOf(Page.MAIN) }
     // Runs the Rust calls that change things; they end when the screen goes.
     val scope = rememberCoroutineScope()
 
@@ -188,7 +204,7 @@ fun MainRoute() {
 
     // Back on the Events or Stats tab returns to Tasks. While the form or the
     // delete box is open, their own back handling applies instead.
-    BackHandler(enabled = tab != Tab.TASKS && openForm == null && pendingDelete == null) {
+    BackHandler(enabled = tab != Tab.TASKS && page == Page.MAIN && openForm == null && pendingDelete == null) {
         tab = Tab.TASKS
     }
 
@@ -252,6 +268,19 @@ fun MainRoute() {
                             reloads++
                         },
                     )
+                } else if (page == Page.SETTINGS) {
+                    SettingsPage(
+                        look = look,
+                        settingsIcon = s.screen.settingsIcon,
+                        // Read everything again, so a new theme, icon set,
+                        // time format or database shows at once.
+                        onChanged = { reloads++ },
+                        onOpenSync = { page = Page.SYNC },
+                        onClose = { page = Page.MAIN },
+                    )
+                } else if (page == Page.SYNC) {
+                    // Closing goes back to the settings page it came from.
+                    SyncPage(look = look, onClose = { page = Page.SETTINGS })
                 } else {
                     MainScreenContent(
                         look = look,
@@ -263,6 +292,10 @@ fun MainRoute() {
                         status = status,
                         tab = tab,
                         onSelectTab = { tab = it },
+                        onOpenSettings = {
+                            status = null
+                            page = Page.SETTINGS
+                        },
                         onAdd = { openFormWith(adding = true) { it.newForm() } },
                         onEdit = { id -> openFormWith(adding = false) { it.editForm(id) } },
                         onComplete = ::complete,
@@ -358,7 +391,8 @@ private fun millisUntilNextMinute(): Long {
  * [stats] is what the Stats tab shows. [columns] and [rows] are how many
  * character cells fit on the screen. [status] is the message for the bottom row, if any; without one, the row
  * shows the gesture hint ("→ done  ← delete  tap edit"). [tab] is the tab on
- * show, and [onSelectTab] runs when another one is tapped. [onAdd] runs when
+ * show, and [onSelectTab] runs when another one is tapped. [onOpenSettings]
+ * runs when the gear in the header is tapped. [onAdd] runs when
  * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID),
  * [onComplete] when one is swiped right, [onDelete] when one is swiped left
  * (with its ID and title).
@@ -374,6 +408,7 @@ private fun MainScreenContent(
     status: Status?,
     tab: Tab,
     onSelectTab: (Tab) -> Unit,
+    onOpenSettings: () -> Unit,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
     onComplete: (String) -> Unit,
@@ -388,7 +423,16 @@ private fun MainScreenContent(
         rows >= BANNER_MIN_ROWS
 
     Column(modifier = Modifier.fillMaxSize()) {
-        HeaderRow(look, headerTitle(look, screen.demo), screen.today)
+        HeaderRow(
+            look = look,
+            title = headerTitle(look, screen.demo),
+            today = screen.today,
+            settingsIcon = screen.settingsIcon,
+            onOpenSettings = onOpenSettings,
+            // Drawn on top of what is below it, so the gear's enlarged tap
+            // area wins where it reaches down over the banner or a box.
+            modifier = Modifier.zIndex(1f),
+        )
         if (bannerShown) {
             BannerView(look, screen.banner)
         }
@@ -459,14 +503,25 @@ private fun MainScreenContent(
 }
 
 /**
- * The top row of the main screen: [title] on the left and [today]'s date,
- * muted, on the right, one column in from each edge (where the terminal app's
- * frame sets them into its top border).
+ * The top row of the main screen: [title] on the left, then [today]'s date,
+ * muted, and the gear ([settingsIcon], accent) on the right, one column in
+ * from each edge (where the terminal app's frame sets its title into its top
+ * border). Tapping the gear runs [onOpenSettings]; its tap area is at least
+ * 48dp each way without moving the text. [modifier] is for the caller's
+ * drawing order.
  */
 @Composable
-private fun HeaderRow(look: TuiLook, title: AnnotatedString, today: String) {
+private fun HeaderRow(
+    look: TuiLook,
+    title: AnnotatedString,
+    today: String,
+    settingsIcon: String,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val gearDescription = stringResource(R.string.open_settings)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = look.cell.columns(1)),
     ) {
@@ -485,6 +540,18 @@ private fun HeaderRow(look: TuiLook, title: AnnotatedString, today: String) {
             style = look.text.copy(color = look.color(ColorSlot.MUTED)),
             maxLines = 1,
         )
+        // `semantics` gives the gear a name for screen readers, which would
+        // otherwise read out the icon's private-use character.
+        LargeTapArea(
+            onClick = onOpenSettings,
+            modifier = Modifier.semantics { contentDescription = gearDescription },
+        ) {
+            BasicText(
+                text = "$settingsIcon ",
+                style = look.text.copy(color = look.color(ColorSlot.ACCENT), fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+        }
     }
 }
 

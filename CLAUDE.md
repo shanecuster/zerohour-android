@@ -40,7 +40,16 @@ guess at anything the plan does not say — ask instead.
   details are entered at runtime.
 - The sync password lives in an AES-GCM key held in the Android Keystore,
   handled on the Kotlin side and passed into Rust. The database and the
-  encrypted password are excluded from Android backup (`allowBackup=false`).
+  encrypted password are excluded from Android backup AND from Android 12+
+  device-to-device transfer: `allowBackup="false"` plus
+  `dataExtractionRules` (`res/xml/data_extraction_rules.xml`) excluding every
+  storage area. The encrypted password lives in `noBackupFilesDir`.
+- The password is never shown, logged or put into an error message. A failed
+  decrypt asks the user to enter it again; it never crashes.
+- `usesCleartextTraffic="false"`, and the FFI refuses non-https sync URLs
+  before saving or testing (Rust's own connections ignore the manifest).
+- Secure connections use the root certificates built into the app (Mozilla's
+  list via rustls): self-signed and private-CA servers are not supported.
 - UI code never hard-codes a colour: use the theme's colour slots.
 - Demo data comes from core (`core/src/demo.rs`), is used only in debug builds,
   stays in memory, and never syncs.

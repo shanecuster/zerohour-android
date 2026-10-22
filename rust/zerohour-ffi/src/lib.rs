@@ -33,9 +33,15 @@
 //! * **The stats screen** (`stats` module) -- `Database::stats_screen` returns
 //!   the totals, streaks, weekly counts and priority breakdown from core's
 //!   `stats::compute`, the same numbers the terminal app shows.
+//! * **Display settings** (`settings` module) -- the theme, icons, 12/24-hour
+//!   times, week start and banner, read and saved the way the terminal app
+//!   stores them.
+//! * **Sync settings** (`sync` module) -- save the server details (https
+//!   only), test the connection and reset the sync state. The password is
+//!   passed in by Kotlin, never stored here. The demo database never syncs.
 //! * **Errors** (`error` module) -- the one `FfiError` type Kotlin catches.
 //!
-//! Later steps add sync. All the real logic lives in
+//! Step 10 adds "sync now". All the real logic lives in
 //! `zerohour-core`; the functions here are thin.
 //!
 //! ## Why mirror types instead of exporting core's types directly?
@@ -58,7 +64,9 @@ pub mod error;
 pub mod form;
 pub mod items;
 pub mod screen;
+pub mod settings;
 pub mod stats;
+pub mod sync;
 
 use zerohour_core::theme::{DEFAULT_THEME, Rgb, THEMES, Theme};
 

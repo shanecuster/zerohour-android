@@ -114,4 +114,57 @@
     <string name="delete_question">Delete \"%1$s\"?</string>
     <string name="delete_yes">[ delete ]</string>
     <string name="delete_no">[ keep ]</string>
+
+    <!-- The settings page (the gear in the header). The labels are padded to
+         line up, so keep them at most 11 characters. -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_icons">Icons</string>
+    <string name="settings_time">Time</string>
+    <string name="settings_week">Week starts</string>
+    <string name="settings_banner">Banner</string>
+    <string name="settings_data">Data</string>
+    <string name="settings_sync">Sync ›</string>
+    <string name="sync_demo_note">The demo database never syncs.</string>
+    <string name="close_button">[ close ]</string>
+    <!-- The choices' values. -->
+    <string name="icons_nerd">Nerd</string>
+    <string name="icons_unicode">Unicode</string>
+    <string name="icons_ascii">ASCII</string>
+    <string name="time_12">12-hour</string>
+    <string name="time_24">24-hour</string>
+    <string name="week_sunday">Sunday</string>
+    <string name="week_monday">Monday</string>
+    <string name="value_on">on</string>
+    <string name="value_off">off</string>
+    <string name="data_demo">demo</string>
+    <string name="data_real">real</string>
+    <!-- The gear's description for screen readers. -->
+    <string name="open_settings">Settings</string>
+
+    <!-- The sync page. Labels are padded to line up, so keep them at most 10
+         characters. The texts follow the terminal app's sync popup. -->
+    <string name="sync_title">Sync</string>
+    <string name="sync_enabled">Sync</string>
+    <string name="sync_url">Server URL</string>
+    <string name="sync_database">Database</string>
+    <string name="sync_username">Username</string>
+    <string name="sync_password">Password</string>
+    <string name="sync_password_kept">(saved)</string>
+    <string name="sync_password_unreadable">The saved password could not be read. Enter the password again.</string>
+    <string name="sync_password_saved_info">Password: saved, encrypted with the Android Keystore</string>
+    <string name="sync_password_none_info">Password: not saved</string>
+    <string name="sync_documents">Documents synced: %1$s</string>
+    <string name="sync_test_button">[ test connection ]</string>
+    <string name="sync_reset_button">[ reset sync state… ]</string>
+    <string name="sync_reset_yes">[ reset ]</string>
+    <string name="sync_reset_question">Forget which versions the server has? Your tasks stay; the next sync re-checks everything.</string>
+    <string name="sync_reset_done">Sync state reset. Your data is untouched; the next sync re-checks everything.</string>
+    <string name="sync_saved">Saved.</string>
+    <string name="sync_saved_off">Saved. Sync is off: this device stays local-only.</string>
+    <string name="sync_testing">Testing…</string>
+    <string name="sync_connected">Connected. The database has %1$s documents.</string>
+    <!-- After a test, when the clocks differ by more than a minute. %1$s is minutes. -->
+    <string name="sync_clock_ahead">⚠ This phone\'s clock is %1$s min ahead of the server\'s. The newest edit wins a conflict, so set the phone\'s time to automatic.</string>
+    <string name="sync_clock_behind">⚠ This phone\'s clock is %1$s min behind the server\'s. The newest edit wins a conflict, so set the phone\'s time to automatic.</string>
 </resources>
