@@ -1,7 +1,6 @@
 package com.shanetalkstech.zerohour.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -131,23 +130,27 @@ fun TuiBox(
             }
         }
         if (bottomRightTitle != null) {
-            // `then` adds the click handler only when there is one.
-            val tap = if (onBottomRightClick != null) {
-                Modifier.clickable(onClick = onBottomRightClick)
-            } else {
-                Modifier
+            val titleModifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = cell.columns(1))
+            // The title on its border background, drawn the same way whether
+            // or not it can be tapped.
+            val titleText: @Composable () -> Unit = {
+                BasicText(
+                    text = bottomRightTitle,
+                    style = look.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    modifier = Modifier.background(background),
+                )
             }
-            BasicText(
-                text = bottomRightTitle,
-                style = look.text,
-                maxLines = 1,
-                overflow = TextOverflow.Clip,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = cell.columns(1))
-                    .background(background)
-                    .then(tap),
-            )
+            if (onBottomRightClick != null) {
+                // One text row is too short for a finger: the tap area is
+                // made at least 48dp each way, the text stays where it is.
+                LargeTapArea(onClick = onBottomRightClick, modifier = titleModifier, content = titleText)
+            } else {
+                Box(modifier = titleModifier) { titleText() }
+            }
         }
     }
 }

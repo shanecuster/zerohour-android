@@ -84,13 +84,27 @@ fun CalendarBox(
         paddingCells = 1,
     ) {
         Column {
-            // Month navigation, spread across the top.
+            // Month navigation, spread across the top. The arrows get a
+            // finger-sized tap area (they are tapped most, often several
+            // times in a row).
             Row(modifier = Modifier.fillMaxWidth()) {
-                TapText(look, stringResource(R.string.calendar_prev), accent, onClick = { onShift(-1) })
+                TapText(
+                    look,
+                    stringResource(R.string.calendar_prev),
+                    accent,
+                    onClick = { onShift(-1) },
+                    largeTarget = true,
+                )
                 Spacer(Modifier.weight(1f))
                 TapText(look, stringResource(R.string.calendar_today), accent, onClick = onToday)
                 Spacer(Modifier.weight(1f))
-                TapText(look, stringResource(R.string.calendar_next), accent, onClick = { onShift(1) })
+                TapText(
+                    look,
+                    stringResource(R.string.calendar_next),
+                    accent,
+                    onClick = { onShift(1) },
+                    largeTarget = true,
+                )
             }
             // The weekday headers, "Su Mo ...", right-aligned over the digits.
             Row {
