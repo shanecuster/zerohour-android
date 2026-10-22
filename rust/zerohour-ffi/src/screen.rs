@@ -99,6 +99,9 @@ pub struct TaskRow {
     pub id: String,
     /// The title as listed (repeating tasks end with the repeat icon).
     pub title: String,
+    /// The title exactly as typed, without the icon: for the delete box,
+    /// which asks `Delete "title"?` as the terminal app does.
+    pub plain_title: String,
     /// The title's colour: `Danger` when overdue, otherwise `Foreground`.
     pub title_slot: ColorSlot,
     /// The priority icon (up arrow, circle or down arrow in Nerd mode).
@@ -215,6 +218,7 @@ impl Database {
                 priority_name: task.priority.label().to_string(),
                 date_text: view::date_text(task.date, today),
                 due: view::due_label(&task, now, narrow, mode, settings.time_format).into(),
+                plain_title: task.title.clone(),
                 // The fields used above only borrowed `task`; these two move
                 // its strings out, so they come last.
                 id: task.id,

@@ -28,7 +28,8 @@
 //! * **The add/edit form** (`form` module) -- an `ItemForm` object holding
 //!   core's `FormInput`: fields, choices, previews and the calendar picker.
 //! * **Changing items** (`items` module) -- `Database` methods to open a form,
-//!   save it, and save the calendar's week start.
+//!   save it, save the calendar's week start, complete a task and delete an
+//!   item.
 //! * **Errors** (`error` module) -- the one `FfiError` type Kotlin catches.
 //!
 //! Later steps add stats and sync. All the real logic lives in

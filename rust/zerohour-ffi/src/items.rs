@@ -1,19 +1,21 @@
-//! Changing items: opening the add/edit form, saving it, and the settings the
-//! form changes.
+//! Changing items: opening the add/edit form, saving it, the settings the
+//! form changes, completing tasks and deleting items.
 //!
 //! These are `Database` methods because they read or write the database, so
 //! Kotlin calls them on a background thread. Each one does what the terminal
 //! app does for the same action (see `tui/src/app.rs` in the zerohour repo),
 //! using core for the work: `FormInput::from_item` to fill an edit form,
 //! `FormInput::validate` to check it, `FormData::apply_to` to copy it onto an
-//! item, and `Db::insert_item` / `Db::update_item` to store it.
+//! item, `Db::insert_item` / `Db::update_item` to store it, and
+//! `Db::complete_task` / `Db::delete_item` for the swipes.
 
 use std::sync::Arc;
 
 use zerohour_core::calendar::WeekStart as CoreWeekStart;
+use zerohour_core::clock::format_time;
 use zerohour_core::db::{Db, settings_keys};
 use zerohour_core::form::FormInput;
-use zerohour_core::model::Item;
+use zerohour_core::model::{Item, Kind};
 
 use crate::database::{Database, StoredSettings, parse_now};
 use crate::error::FfiError;
@@ -41,6 +43,23 @@ pub enum SaveOutcome {
     Saved {
         /// Its title, for the status line.
         title: String,
+    },
+}
+
+/// What happened when the user swiped a row right to complete it.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum CompleteOutcome {
+    /// The row is an event. Events count down on their own, so there is
+    /// nothing to complete (the terminal app says so too); nothing changed.
+    NotATask,
+    /// The task is done (or already was).
+    Done {
+        /// Its title, for the status line.
+        title: String,
+        /// For a repeating task, when the new instance core created is due,
+        /// e.g. "Fri Oct 23" or "Fri Oct 23 2:00 PM" (in the terminal app's
+        /// words). `None` for a one-off task.
+        next_due: Option<String>,
     },
 }
 
@@ -131,13 +150,57 @@ impl Database {
             .set_setting(settings_keys::WEEK_START, start.as_str())?;
         Ok(())
     }
+
+    /// Completes the task with this `id`, as the terminal app's `space` key
+    /// does: core marks it done, logs the completion for the stats, and, if
+    /// it repeats, creates the next instance, all in one transaction.
+    pub fn complete_task(&self, id: String, now: String) -> Result<CompleteOutcome, FfiError> {
+        let now = parse_now(&now)?;
+        // `mut`: core's `complete_task` needs `&mut Db` for its transaction.
+        let mut db = self.lock()?;
+        let time_format = StoredSettings::load(&db)?.time_format;
+        let item = db
+            .get_item(&id)?
+            .filter(|item| !item.deleted)
+            .ok_or_else(|| FfiError::Database {
+                detail: "that item no longer exists".to_string(),
+            })?;
+        if item.kind == Kind::Event {
+            return Ok(CompleteOutcome::NotATask);
+        }
+        let next = db.complete_task(&id, now.local, now.utc)?;
+        // "Fri Oct 23", plus " 2:00 PM" when the next one has a due time.
+        let next_due = next.map(|next| {
+            let mut due = next
+                .date
+                .map(|d| d.format("%a %b %d").to_string())
+                .unwrap_or_default();
+            if let Some(time) = next.due_time {
+                due.push(' ');
+                due.push_str(&format_time(time, time_format));
+            }
+            due
+        });
+        Ok(CompleteOutcome::Done {
+            title: item.title,
+            next_due,
+        })
+    }
+
+    /// Deletes the item with this `id` (after the user confirmed). Core only
+    /// marks it deleted and keeps the row, so a later sync can pass the
+    /// deletion on to other devices.
+    pub fn delete_item(&self, id: String, now: String) -> Result<(), FfiError> {
+        let now = parse_now(&now)?;
+        self.lock()?.delete_item(&id, now.utc)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::form::{FormField, ItemKind};
-    use zerohour_core::model::Kind;
 
     /// Thu Oct 22 2026, 09:15, two hours ahead of UTC.
     const NOW: &str = "2026-10-22T09:15:00+02:00";
@@ -229,5 +292,70 @@ mod tests {
         form.open_calendar(NOW.into()).unwrap();
         let cal = form.view(NOW.into()).unwrap().calendar.unwrap();
         assert_eq!(cal.week_start, WeekStart::Monday);
+    }
+
+    /// Adds an item through the form and returns its id.
+    fn add(db: &Database, kind: ItemKind, title: &str, date: &str, repeat_steps: usize) -> String {
+        let form = db.new_form().unwrap();
+        form.set_kind(kind).unwrap();
+        form.set_text(FormField::Title, title.into()).unwrap();
+        form.set_text(FormField::Date, date.into()).unwrap();
+        for _ in 0..repeat_steps {
+            form.step_choice(FormField::Repeat, true).unwrap();
+        }
+        db.save_form(form, NOW.into()).unwrap();
+        let items = db.lock().unwrap().list_items().unwrap();
+        items.into_iter().find(|i| i.title == title).unwrap().id
+    }
+
+    #[test]
+    fn completing_a_one_off_task() {
+        let db = empty();
+        let id = add(&db, ItemKind::Task, "Call mum", "today", 0);
+        assert_eq!(
+            db.complete_task(id.clone(), NOW.into()).unwrap(),
+            CompleteOutcome::Done {
+                title: "Call mum".into(),
+                next_due: None
+            }
+        );
+        let core = db.lock().unwrap();
+        assert!(core.get_item(&id).unwrap().unwrap().is_completed());
+        assert_eq!(core.list_completions().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn completing_a_daily_task_makes_the_next_one() {
+        let db = empty();
+        // One step from "none" is "daily".
+        let id = add(&db, ItemKind::Task, "Stretch", "today", 1);
+        assert_eq!(
+            db.complete_task(id, NOW.into()).unwrap(),
+            CompleteOutcome::Done {
+                title: "Stretch".into(),
+                next_due: Some("Fri Oct 23".into())
+            }
+        );
+    }
+
+    #[test]
+    fn events_are_not_completed() {
+        let db = empty();
+        let id = add(&db, ItemKind::Event, "Lake trip", "2026-11-01", 0);
+        assert_eq!(
+            db.complete_task(id, NOW.into()).unwrap(),
+            CompleteOutcome::NotATask
+        );
+        assert!(db.lock().unwrap().list_completions().unwrap().is_empty());
+    }
+
+    #[test]
+    fn deleting_hides_the_item_and_twice_is_an_error() {
+        let db = empty();
+        let id = add(&db, ItemKind::Task, "Old idea", "", 0);
+        db.delete_item(id.clone(), NOW.into()).unwrap();
+        assert!(db.lock().unwrap().list_items().unwrap().is_empty());
+        assert!(db.delete_item(id.clone(), NOW.into()).is_err());
+        assert!(db.complete_task(id, NOW.into()).is_err());
     }
 }
