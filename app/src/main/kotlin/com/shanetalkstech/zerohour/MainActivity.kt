@@ -22,8 +22,10 @@ class MainActivity : ComponentActivity() {
      * Called by Android once, when the screen is created.
      *
      * [savedInstanceState] holds state Android saved if the screen is being
-     * recreated (for example after the phone is rotated). We do not need it
-     * directly, but we must pass it up to the parent class.
+     * recreated. Turning the phone does NOT recreate it (the manifest's
+     * `configChanges` says the app handles that itself), but other changes,
+     * such as a new system language, still do. We do not need it directly,
+     * but we must pass it up to the parent class.
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
