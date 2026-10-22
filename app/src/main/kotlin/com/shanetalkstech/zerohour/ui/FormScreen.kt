@@ -34,6 +34,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -81,6 +83,9 @@ private const val VALUE_INDENT_CELLS = 2 + LABEL_CELLS + 1
  * the database, so only saving runs on a background thread.
  *
  * - [chooseKindFirst]: true when adding (start at "Task or Event?").
+ * - [preselectedKind]: the kind marked "›" on that first step: Event when
+ *   "+ add" was tapped on the Events tab, Task otherwise. Either can still
+ *   be tapped.
  * - [taskIcon], [eventIcon]: the icons for the chosen icon mode.
  * - [onClose]: called when the form closes, with the status message to show
  *   on the main screen ("Added "…"") or null when cancelled.
@@ -93,6 +98,7 @@ fun FormScreen(
     taskIcon: String,
     eventIcon: String,
     onClose: (status: String?) -> Unit,
+    preselectedKind: ItemKind = ItemKind.TASK,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -152,6 +158,7 @@ fun FormScreen(
     if (choosingKind) {
         ChooseKind(
             look = look,
+            preselected = preselectedKind,
             taskIcon = taskIcon,
             eventIcon = eventIcon,
             onChoose = { kind ->
@@ -231,14 +238,16 @@ fun FormScreen(
 
 /**
  * Step 1 when adding: "Task or Event?", each a tappable block with its name
- * and the terminal app's one-line explanation:
+ * and the terminal app's one-line explanation. The [preselected] kind is
+ * marked the way the terminal app marks the chosen one ("›", its name in its
+ * section colour); the other's name is muted:
  *
  * ```
  * ╭ Add ─────────────────────────────╮
- * │ ☐ Task                           │
+ * │ › ☐ Task                         │
  * │     Something to do, optionally  │
  * │     with a due date.             │
- * │ ◷ Event                          │
+ * │   ◷ Event                        │
  * │     A date to count down to, ... │
  * ╰──────────────────────────────────╯
  * ```
@@ -246,6 +255,7 @@ fun FormScreen(
 @Composable
 private fun ChooseKind(
     look: TuiLook,
+    preselected: ItemKind,
     taskIcon: String,
     eventIcon: String,
     onChoose: (ItemKind) -> Unit,
@@ -268,6 +278,7 @@ private fun ChooseKind(
                 name = stringResource(R.string.kind_task),
                 hint = stringResource(R.string.kind_task_hint),
                 color = look.color(ColorSlot.TASK),
+                chosen = preselected == ItemKind.TASK,
                 onClick = { onChoose(ItemKind.TASK) },
             )
             Spacer(Modifier.height(look.cell.rows(1)))
@@ -277,6 +288,7 @@ private fun ChooseKind(
                 name = stringResource(R.string.kind_event),
                 hint = stringResource(R.string.kind_event_hint),
                 color = look.color(ColorSlot.EVENT),
+                chosen = preselected == ItemKind.EVENT,
                 onClick = { onChoose(ItemKind.EVENT) },
             )
             Spacer(Modifier.height(look.cell.rows(1)))
@@ -286,9 +298,11 @@ private fun ChooseKind(
 }
 
 /**
- * One choice on the "Task or Event?" step: the icon and name (bold, in the
- * section colour) and the explanation under it, indented 4 like the
- * terminal app. The whole block is one tap target.
+ * One choice on the "Task or Event?" step: the icon and name and the
+ * explanation under it, indented 4 like the terminal app. When [chosen], the
+ * line starts with an accent "›" and the name is bold in the section [color];
+ * otherwise it starts with two blanks and the name is muted. The whole block
+ * is one tap target.
  */
 @Composable
 private fun KindOption(
@@ -297,8 +311,14 @@ private fun KindOption(
     name: String,
     hint: String,
     color: Color,
+    chosen: Boolean,
     onClick: () -> Unit,
 ) {
+    val nameStyle = if (chosen) {
+        SpanStyle(color = color, fontWeight = FontWeight.Bold)
+    } else {
+        SpanStyle(color = look.color(ColorSlot.MUTED))
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -306,8 +326,13 @@ private fun KindOption(
             .padding(vertical = look.cell.rows(1)),
     ) {
         BasicText(
-            text = "$icon $name",
-            style = look.text.copy(color = color, fontWeight = FontWeight.Bold),
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(color = look.color(ColorSlot.ACCENT))) {
+                    append(if (chosen) "› " else "  ")
+                }
+                withStyle(nameStyle) { append("$icon $name") }
+            },
+            style = look.text,
         )
         BasicText(
             text = hint,

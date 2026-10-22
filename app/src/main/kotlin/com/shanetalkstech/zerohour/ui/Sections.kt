@@ -219,13 +219,6 @@ fun EventsBox(
 }
 
 /**
- * How many rows the Events box needs to show every event without scrolling:
- * its lines plus the top and bottom border. Used by the "fit" layout.
- * An empty box still gets one line for its message.
- */
-fun eventsBoxRows(eventCount: Int): Int = maxOf(eventCount, 1) * LINE_ROWS + 2
-
-/**
  * Width of the Tasks box's due column, given the longest due text shown. The
  * same rule as the terminal app: on narrow screens the longest text, at least
  * 5; on wide screens one more than the longest, at least 13 (the extra blank
