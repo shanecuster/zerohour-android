@@ -15,6 +15,26 @@
     <string name="events">Events</string>
     <!-- The third tab's name (the first two use the section names above). -->
     <string name="stats">Stats</string>
+
+    <!-- The Stats tab's summary cards: titles, then the small line under
+         each big number. The words are the terminal app's; the "short"
+         versions replace lines that would not fit a card on a phone held
+         upright. %1$s and %2$s are numbers. -->
+    <string name="stats_completed">Completed</string>
+    <string name="stats_streak">Streak</string>
+    <string name="stats_overdue">Overdue</string>
+    <string name="stats_on_time">On time</string>
+    <string name="stats_week_month">week %1$s · month %2$s</string>
+    <string name="stats_best">best %1$s</string>
+    <string name="stats_past_due">open tasks past due</string>
+    <string name="stats_past_due_short">past due</string>
+    <string name="stats_on_time_late">%1$s on time · %2$s late</string>
+    <string name="stats_late_short">%1$s done late</string>
+    <!-- The streak's big number: "1 day", "9 days". -->
+    <plurals name="stats_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
     <!-- Shown inside an empty section box. -->
     <string name="no_tasks">Nothing to do.</string>
     <string name="no_events">No countdowns yet.</string>

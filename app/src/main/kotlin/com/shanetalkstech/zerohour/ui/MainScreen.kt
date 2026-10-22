@@ -49,6 +49,7 @@ import uniffi.zerohour_ffi.Database
 import uniffi.zerohour_ffi.FfiException
 import uniffi.zerohour_ffi.ItemForm
 import uniffi.zerohour_ffi.MainScreen
+import uniffi.zerohour_ffi.StatsScreen
 
 /**
  * Below this many columns the screen uses the short texts and drops the
@@ -77,8 +78,12 @@ private sealed interface LoadState {
     /** The database is still being opened. */
     data object Loading : LoadState
 
-    /** The screen's content, ready to draw. */
-    data class Loaded(val screen: MainScreen) : LoadState
+    /**
+     * The content, ready to draw: the main [screen] (header, lists, tab bar
+     * icons) and the [stats] for the Stats tab. Both are read together, so
+     * switching tabs never waits for the database.
+     */
+    data class Loaded(val screen: MainScreen, val stats: StatsScreen) : LoadState
 
     /** Reading failed; [message] says why. */
     data class Failed(val message: String) : LoadState
@@ -248,6 +253,7 @@ fun MainRoute() {
                     MainScreenContent(
                         look = look,
                         screen = s.screen,
+                        stats = s.stats,
                         columns = columns,
                         rows = rows,
                         narrow = narrow,
@@ -296,14 +302,17 @@ fun MainRoute() {
 }
 
 /**
- * Reads the main screen from the database, on `Dispatchers.IO` (the pool of
+ * Reads the main screen and the stats from the database, both as of the same
+ * moment, on `Dispatchers.IO` (the pool of
  * background threads meant for disk and network work), so the UI never
  * freezes. `suspend` means the caller waits without blocking its thread.
  */
 private suspend fun load(context: Context, narrow: Boolean): LoadState =
     withContext(Dispatchers.IO) {
         try {
-            LoadState.Loaded(DatabaseHolder.get(context).mainScreen(nowText(), narrow))
+            val db = DatabaseHolder.get(context)
+            val now = nowText()
+            LoadState.Loaded(db.mainScreen(now, narrow), db.statsScreen(now))
         } catch (e: FfiException) {
             LoadState.Failed(e.explanation())
         }
@@ -343,8 +352,8 @@ private fun millisUntilNextMinute(): Long {
  * The Stats tab has no banner and no "+ add" row, as the terminal app's stats
  * screen has neither.
  *
- * [columns] and [rows] are how many character cells fit on the screen.
- * [status] is the message for the bottom row, if any; without one, the row
+ * [stats] is what the Stats tab shows. [columns] and [rows] are how many
+ * character cells fit on the screen. [status] is the message for the bottom row, if any; without one, the row
  * shows the gesture hint ("→ done  ← delete  tap edit"). [tab] is the tab on
  * show, and [onSelectTab] runs when another one is tapped. [onAdd] runs when
  * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID),
@@ -355,6 +364,7 @@ private fun millisUntilNextMinute(): Long {
 private fun MainScreenContent(
     look: TuiLook,
     screen: MainScreen,
+    stats: StatsScreen,
     columns: Int,
     rows: Int,
     narrow: Boolean,
@@ -408,7 +418,13 @@ private fun MainScreenContent(
                 onDelete = onDelete,
                 modifier = fill,
             )
-            Tab.STATS -> Box(modifier = fill)
+            Tab.STATS -> StatsTab(
+                look = look,
+                stats = stats,
+                columns = columns,
+                narrow = narrow,
+                modifier = fill,
+            )
         }
         if (tab != Tab.STATS) {
             FooterRow(
