@@ -22,6 +22,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use chrono::NaiveDateTime;
+use zerohour_core::clock::TimeFormat;
 use zerohour_core::db::{Db, settings_keys};
 use zerohour_core::icons::IconMode as CoreIconMode;
 use zerohour_core::theme::{DEFAULT_THEME, Theme, theme_by_name};
@@ -98,12 +99,14 @@ pub struct DisplaySettings {
 }
 
 /// The same settings in core's own types, for use inside this crate (the view
-/// functions in core want a `CoreIconMode`, not the mirror).
+/// functions in core want a `CoreIconMode` and a `TimeFormat`, not mirrors).
 pub(crate) struct StoredSettings {
     /// The theme, borrowed from core's built-in table.
     pub theme: &'static Theme,
     /// Which icons to draw.
     pub icon_mode: CoreIconMode,
+    /// 12- or 24-hour times ("2:00 PM" or "14:00") in the due texts.
+    pub time_format: TimeFormat,
     /// Whether the banner is shown.
     pub show_banner: bool,
     /// How Tasks and Events share the height.
@@ -121,6 +124,7 @@ impl StoredSettings {
         // Each `get_setting` returns `Option<String>`: `None` when never saved.
         let theme_name = db.get_setting(settings_keys::THEME)?;
         let icon_mode = db.get_setting(settings_keys::ICON_MODE)?;
+        let time_format = db.get_setting(settings_keys::TIME_FORMAT)?;
         let banner = db.get_setting(settings_keys::BANNER)?;
         let layout = db.get_setting(settings_keys::LAYOUT)?;
 
@@ -133,6 +137,8 @@ impl StoredSettings {
                 .as_deref()
                 .and_then(CoreIconMode::parse)
                 .unwrap_or(CoreIconMode::Nerd),
+            // Core's parser: "24h" is 24-hour, anything else 12-hour.
+            time_format: TimeFormat::parse(time_format.as_deref()),
             // The terminal app stores "on" or "off"; only "off" hides it.
             show_banner: banner.as_deref() != Some("off"),
             // "fit" picks Fit; anything else (including nothing) is Split.

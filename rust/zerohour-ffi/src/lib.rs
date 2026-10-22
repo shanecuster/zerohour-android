@@ -22,6 +22,9 @@
 //!   which Rust build is running.
 //! * **The database** (`database` module) -- open the real database file or
 //!   the in-memory demo, and read the display settings stored in it.
+//! * **The main screen** (`screen` module) -- `Database::main_screen` returns
+//!   the sorted Tasks and Events lines, their texts and colour slots, the
+//!   icons, the banner and the tagline, all decided by core.
 //! * **Errors** (`error` module) -- the one `FfiError` type Kotlin catches.
 //!
 //! Later steps add editing and sync. All the real logic lives in
@@ -44,6 +47,7 @@ uniffi::setup_scaffolding!();
 // exported types are part of this crate's public surface.
 pub mod database;
 pub mod error;
+pub mod screen;
 
 use zerohour_core::theme::{DEFAULT_THEME, Rgb, THEMES, Theme};
 
