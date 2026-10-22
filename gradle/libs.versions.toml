@@ -1,0 +1,32 @@
+# Version catalog: every library and plugin version lives here, in one place.
+# build.gradle.kts files refer to them as `libs.<name>`.
+# The first block of versions comes from Android Studio's own project template
+# (Android Studio 2026), so it is known to work together.
+
+[versions]
+agp = "9.4.1"
+coreKtx = "1.10.1"
+activityCompose = "1.8.0"
+kotlin = "2.2.10"
+composeBom = "2026.02.01"
+# Added for zerohour: coroutines (the app calls the blocking Rust library on a
+# background dispatcher -- zerohour's sync is blocking ureq, not async) and JNA
+# (how Kotlin loads and calls the Rust library).
+coroutines = "1.10.2"
+jna = "5.17.0"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+# The Compose BOM ("bill of materials") fixes the version of every Compose
+# library below, so they cannot drift apart.
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
