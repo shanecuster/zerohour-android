@@ -1,7 +1,9 @@
 package com.shanetalkstech.zerohour.ui
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -37,6 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.zerohour_ffi.ColorSlot
+import uniffi.zerohour_ffi.CompleteOutcome
 import uniffi.zerohour_ffi.Database
 import uniffi.zerohour_ffi.FfiException
 import uniffi.zerohour_ffi.ItemForm
@@ -90,6 +94,9 @@ private data class Status(val text: String, val isError: Boolean = false)
  */
 private data class OpenForm(val form: ItemForm, val adding: Boolean)
 
+/** A line swiped left, waiting for "delete" or "keep": its [id] and [title]. */
+private data class PendingDelete(val id: String, val title: String)
+
 /**
  * The app's one route: the main screen (the frame with the app name and the
  * date, the banner and tagline, and the Tasks and Events boxes), or the
@@ -102,7 +109,8 @@ private data class OpenForm(val form: ItemForm, val adding: Boolean)
  * changes.
  *
  * Touch: "+ add" in the bottom border opens a new form; one tap on a line
- * opens it for editing.
+ * opens it for editing; swiping a line right completes it; swiping it left
+ * asks whether to delete it.
  */
 @Composable
 fun MainRoute() {
@@ -120,6 +128,7 @@ fun MainRoute() {
     var reloads by remember { mutableIntStateOf(0) }
     var status by remember { mutableStateOf<Status?>(null) }
     var openForm by remember { mutableStateOf<OpenForm?>(null) }
+    var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
     // Runs the Rust calls that change things; they end when the screen goes.
     val scope = rememberCoroutineScope()
 
@@ -134,6 +143,17 @@ fun MainRoute() {
                 Status(e.explanation(), isError = true)
             }
             reloads++
+        }
+    }
+
+    // A line was swiped right: complete it, and say so the way the terminal
+    // app does (or that events can't be completed).
+    fun complete(id: String) = runChange { db ->
+        when (val outcome = db.completeTask(id, nowText())) {
+            CompleteOutcome.NotATask -> context.getString(R.string.status_event_not_done)
+            is CompleteOutcome.Done -> outcome.nextDue?.let {
+                context.getString(R.string.status_done_next, outcome.title, it)
+            } ?: context.getString(R.string.status_done, outcome.title)
         }
     }
 
@@ -219,7 +239,39 @@ fun MainRoute() {
                         status = status,
                         onAdd = { openFormWith(adding = true) { it.newForm() } },
                         onEdit = { id -> openFormWith(adding = false) { it.editForm(id) } },
+                        onComplete = ::complete,
+                        onDelete = { id, title ->
+                            status = null
+                            pendingDelete = PendingDelete(id, title)
+                        },
                     )
+                    val pending = pendingDelete
+                    if (pending != null) {
+                        // Back means "keep", like the terminal app's n / Esc.
+                        BackHandler { pendingDelete = null }
+                        // A layer over the screen that swallows taps, so only
+                        // the box reacts while it is open.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable(interactionSource = null, indication = null, onClick = {}),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            ConfirmDeleteBox(
+                                look = look,
+                                columns = columns,
+                                title = pending.title,
+                                onDelete = {
+                                    pendingDelete = null
+                                    runChange { db ->
+                                        db.deleteItem(pending.id, nowText())
+                                        context.getString(R.string.status_deleted, pending.title)
+                                    }
+                                },
+                                onKeep = { pendingDelete = null },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -264,7 +316,9 @@ private fun millisUntilNextMinute(): Long {
  *
  * [columns] and [rows] are how many character cells fit on the screen.
  * [status] is the message for the bottom border, if any. [onAdd] runs when
- * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID).
+ * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID),
+ * [onComplete] when one is swiped right, [onDelete] when one is swiped left
+ * (with its ID and title).
  */
 @Composable
 private fun MainScreenContent(
@@ -276,6 +330,8 @@ private fun MainScreenContent(
     status: Status?,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
+    onComplete: (String) -> Unit,
+    onDelete: (id: String, title: String) -> Unit,
 ) {
     val settings = screen.settings
     // The banner needs: the setting on, room for its letters inside the frame
@@ -333,6 +389,8 @@ private fun MainScreenContent(
                 narrow = narrow,
                 showDates = columns >= DATE_COLUMNS,
                 onEdit = onEdit,
+                onComplete = onComplete,
+                onDelete = onDelete,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -344,6 +402,8 @@ private fun MainScreenContent(
                 narrow = narrow,
                 showDates = columns >= DATE_COLUMNS,
                 onEdit = onEdit,
+                onComplete = onComplete,
+                onDelete = onDelete,
                 modifier = eventsModifier.fillMaxWidth(),
             )
         }

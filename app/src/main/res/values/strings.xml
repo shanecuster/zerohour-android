@@ -61,4 +61,18 @@
     -->
     <string name="status_added">Added \"%1$s\"</string>
     <string name="status_saved">Saved \"%1$s\"</string>
+    <string name="status_done">Done: \"%1$s\"</string>
+    <!-- %2$s is when the next instance of a repeating task is due, from core. -->
+    <string name="status_done_next">Done: \"%1$s\". Next one due %2$s</string>
+    <string name="status_event_not_done">Events count down on their own; there\'s nothing to complete.</string>
+    <string name="status_deleted">Deleted \"%1$s\"</string>
+
+    <!-- Swipes: the word uncovered while a line is dragged. -->
+    <string name="swipe_done">done</string>
+    <string name="swipe_delete">delete</string>
+    <!-- The delete confirmation box (the terminal app's words). -->
+    <string name="delete_title">" Delete? "</string>
+    <string name="delete_question">Delete \"%1$s\"?</string>
+    <string name="delete_yes">[ delete ]</string>
+    <string name="delete_no">[ keep ]</string>
 </resources>
