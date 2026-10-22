@@ -48,6 +48,7 @@ import uniffi.zerohour_ffi.CompleteOutcome
 import uniffi.zerohour_ffi.Database
 import uniffi.zerohour_ffi.FfiException
 import uniffi.zerohour_ffi.ItemForm
+import uniffi.zerohour_ffi.ItemKind
 import uniffi.zerohour_ffi.MainScreen
 import uniffi.zerohour_ffi.StatsScreen
 
@@ -243,6 +244,8 @@ fun MainRoute() {
                         chooseKindFirst = form.adding,
                         taskIcon = s.screen.taskIcon,
                         eventIcon = s.screen.eventIcon,
+                        // "+ add" on the Events tab suggests an event.
+                        preselectedKind = if (tab == Tab.EVENTS) ItemKind.EVENT else ItemKind.TASK,
                         onClose = { message ->
                             openForm = null
                             status = message?.let { Status(it) }
