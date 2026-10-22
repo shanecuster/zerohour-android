@@ -205,9 +205,11 @@ mod tests {
     /// Thu Oct 22 2026, 09:15, two hours ahead of UTC.
     const NOW: &str = "2026-10-22T09:15:00+02:00";
 
-    /// An empty in-memory database, wrapped as Kotlin would get it.
+    /// An empty in-memory database, wrapped as Kotlin would get it. It has no
+    /// file (`None`), so like the demo it could never sync; these tests never
+    /// try to.
     fn empty() -> Arc<Database> {
-        Database::wrap(Db::open_in_memory().unwrap(), false)
+        Database::wrap(Db::open_in_memory().unwrap(), None)
     }
 
     #[test]
