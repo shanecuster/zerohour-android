@@ -10,39 +10,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import uniffi.zerohour_ffi.RgbColor
-import uniffi.zerohour_ffi.ThemeInfo
 import uniffi.zerohour_ffi.coreVersion
-import uniffi.zerohour_ffi.defaultThemeName
-import uniffi.zerohour_ffi.listThemes
-
-/**
- * Turns a colour from the Rust side into a Compose [Color].
- *
- * Rust sends each channel as an unsigned byte (`UByte`, 0..255). Compose's
- * `Color(red, green, blue)` constructor wants plain `Int`s in the same range,
- * so each channel is widened with `toInt()` (a `UByte` converts straight to the
- * matching 0..255 `Int`).
- */
-private fun RgbColor.toColor(): Color = Color(r.toInt(), g.toInt(), b.toInt())
-
-/**
- * Finds the theme the app starts with: the one whose name equals
- * [defaultThemeName], or the first in the list as a fallback. Both the list and
- * the default name come from `zerohour-core`, so this picks exactly the theme
- * the terminal app would.
- */
-private fun defaultTheme(): ThemeInfo {
-    val themes = listThemes()
-    val defaultName = defaultThemeName()
-    return themes.firstOrNull { it.name == defaultName } ?: themes.first()
-}
 
 /**
  * The skeleton screen (plan step 3).
