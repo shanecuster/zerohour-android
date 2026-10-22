@@ -66,6 +66,17 @@
     <string name="status_done_next">Done: \"%1$s\". Next one due %2$s</string>
     <string name="status_event_not_done">Events count down on their own; there\'s nothing to complete.</string>
     <string name="status_deleted">Deleted \"%1$s\"</string>
+    <!--
+      The gesture hint, shown in the status message's place while there is no
+      message (like the terminal app's key-hint footer). Each "key" is drawn
+      in the accent colour, its word muted.
+    -->
+    <string name="hint_done_key">→</string>
+    <string name="hint_done">done</string>
+    <string name="hint_delete_key">←</string>
+    <string name="hint_delete">delete</string>
+    <string name="hint_edit_key">tap</string>
+    <string name="hint_edit">edit</string>
 
     <!-- Swipes: the word uncovered while a line is dragged. -->
     <string name="swipe_done">done</string>

@@ -323,7 +323,8 @@ private fun millisUntilNextMinute(): Long {
  * it.
  *
  * [columns] and [rows] are how many character cells fit on the screen.
- * [status] is the message for the bottom row, if any. [onAdd] runs when
+ * [status] is the message for the bottom row, if any; without one, the row
+ * shows the gesture hint ("→ done  ← delete  tap edit"). [onAdd] runs when
  * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID),
  * [onComplete] when one is swiped right, [onDelete] when one is swiped left
  * (with its ID and title).
@@ -397,12 +398,13 @@ private fun MainScreenContent(
         // over) the Events box's bottom line.
         FooterRow(
             look = look,
+            // A status message when there is one, the gesture hint otherwise.
             message = status?.let {
                 AnnotatedString(
                     it.text,
                     SpanStyle(color = look.color(if (it.isError) ColorSlot.DANGER else ColorSlot.OK)),
                 )
-            },
+            } ?: gestureHint(look),
             onAdd = onAdd,
         )
     }
@@ -439,13 +441,40 @@ private fun HeaderRow(look: TuiLook, title: AnnotatedString, today: String) {
 }
 
 /**
+ * "→ done  ← delete  tap edit": what the gestures on a line do, styled like
+ * the terminal app's key-hint footer (each key in the accent colour and bold,
+ * its word muted, two spaces between pairs).
+ */
+@Composable
+private fun gestureHint(look: TuiLook): AnnotatedString {
+    // Read the texts here: `stringResource` only works in a composable, and
+    // the string builder below is not one.
+    val pairs = listOf(
+        stringResource(R.string.hint_done_key) to stringResource(R.string.hint_done),
+        stringResource(R.string.hint_delete_key) to stringResource(R.string.hint_delete),
+        stringResource(R.string.hint_edit_key) to stringResource(R.string.hint_edit),
+    )
+    return buildAnnotatedString {
+        // `forEachIndexed` also gives each pair's position, so the gap goes
+        // only between pairs, not after the last one.
+        pairs.forEachIndexed { index, (key, word) ->
+            if (index > 0) append("  ")
+            withStyle(SpanStyle(color = look.color(ColorSlot.ACCENT), fontWeight = FontWeight.Bold)) {
+                append(key)
+            }
+            withStyle(SpanStyle(color = look.color(ColorSlot.MUTED))) { append(" $word") }
+        }
+    }
+}
+
+/**
  * The bottom row of the main screen: [message] on the left (it ends in "…"
  * if it is too long), and the tappable "+ add" on the right, which runs
  * [onAdd]. Both sit one column in from the edges, where the terminal app's
  * frame shows them in its bottom border.
  */
 @Composable
-private fun FooterRow(look: TuiLook, message: AnnotatedString?, onAdd: () -> Unit) {
+private fun FooterRow(look: TuiLook, message: AnnotatedString, onAdd: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -454,7 +483,7 @@ private fun FooterRow(look: TuiLook, message: AnnotatedString?, onAdd: () -> Uni
         // The message gets the width "+ add" leaves, less one blank column
         // between them. The leading space matches the header's title.
         BasicText(
-            text = message?.let { AnnotatedString(" ") + it } ?: AnnotatedString(""),
+            text = AnnotatedString(" ") + message,
             style = look.text,
             maxLines = 1,
             softWrap = false,
