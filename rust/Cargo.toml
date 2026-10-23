@@ -40,7 +40,7 @@ resolver = "3"
 # To work on an unreleased core at the same time, add a git-ignored
 # rust/.cargo/config.toml that `[patch]`es this with a relative path; see the
 # README. It is never committed, so committed builds always use this commit.
-zerohour-core = { git = "https://github.com/shanecuster/zerohour", rev = "87255bf5396dbf552ee107a63b882d14efcb7eda", default-features = false, features = ["sync"] }
+zerohour-core = { git = "https://github.com/shanecuster/zerohour", rev = "2a1aa4a3faaae0ce12aae0f7717a898be3d15021", default-features = false, features = ["sync"] }
 
 # Dates and times. zerohour-core already uses chrono 0.4 (so this adds no new
 # crate to Cargo.lock); the glue names it directly for two things core asks its

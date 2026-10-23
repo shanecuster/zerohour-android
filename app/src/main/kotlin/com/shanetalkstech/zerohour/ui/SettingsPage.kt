@@ -1,5 +1,6 @@
 package com.shanetalkstech.zerohour.ui
 
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +36,9 @@ import com.shanetalkstech.zerohour.BuildConfig
 import com.shanetalkstech.zerohour.R
 import com.shanetalkstech.zerohour.data.DatabaseHolder
 import com.shanetalkstech.zerohour.data.explanation
+import com.shanetalkstech.zerohour.reminders.ReminderNotifications
+import com.shanetalkstech.zerohour.reminders.ReminderPermissions
+import com.shanetalkstech.zerohour.reminders.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,9 +60,13 @@ private const val THEME_NAME_CELLS = 14
 
 /**
  * What the settings screen has read from the database: the current
- * [settings] and whether the demo database is in use ([demo]).
+ * [settings], whether the demo database is in use ([demo]), and the short
+ * state shown after "Reminders ›" ([reminders]).
  */
-private data class SettingsState(val settings: SettingsScreen, val demo: Boolean)
+private data class SettingsState(val settings: SettingsScreen, val demo: Boolean, val reminders: RemindersRow)
+
+/** The short state after "Reminders ›": off, on, on but possibly late, or on but blocked. */
+private enum class RemindersRow { OFF, ON, LATE, BLOCKED }
 
 /**
  * The settings screen, opened with the gear in the header. It fills the
@@ -77,6 +86,7 @@ private data class SettingsState(val settings: SettingsScreen, val demo: Boolean
  * │   Data        ‹ demo ›   (debug only)│
  * │                                      │
  * │   Sync ›                             │
+ * │   Reminders ›  on                    │
  * │                                      │
  * │ [ close ]                            │
  * ╰──────────────────────────────────────╯
@@ -102,6 +112,7 @@ fun SettingsPage(
     onChanged: () -> Unit,
     onDataSwitched: () -> Unit,
     onOpenSync: () -> Unit,
+    onOpenReminders: () -> Unit,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -113,15 +124,20 @@ fun SettingsPage(
     // Bumped after every change, so the settings are read again.
     var version by remember { mutableIntStateOf(0) }
 
+    // Changes after every reminder re-plan, including the one when the app
+    // comes back from the system settings (where a permission may have
+    // changed), so the Reminders row's state stays right.
+    val replans by ReminderScheduler.replans.collectAsState()
+
     BackHandler(onBack = onClose)
 
     // Reads the settings on a background thread when the screen opens and
     // after every change.
-    LaunchedEffect(version) {
+    LaunchedEffect(version, replans) {
         state = try {
             withContext(Dispatchers.IO) {
                 val db = DatabaseHolder.get(context)
-                SettingsState(db.settingsScreen(), DatabaseHolder.usesDemo(context))
+                SettingsState(db.settingsScreen(), DatabaseHolder.usesDemo(context), remindersRow(context, db))
             }
         } catch (e: FfiException) {
             error = e.explanation()
@@ -218,6 +234,20 @@ fun SettingsPage(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+
+                if (current.demo) {
+                    // Greyed out: the demo never reminds.
+                    MutedText(look, "  ${stringResource(R.string.settings_reminders)}")
+                    MutedText(look, "    ${stringResource(R.string.reminders_demo_note)}")
+                } else {
+                    TapText(
+                        look,
+                        "  ${stringResource(R.string.settings_reminders)}  ${remindersRowText(current.reminders)}",
+                        look.color(ColorSlot.FOREGROUND),
+                        onClick = onOpenReminders,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Spacer(Modifier.height(look.cell.rows(1)))
             }
 
@@ -230,6 +260,28 @@ fun SettingsPage(
         }
     }
 }
+
+/**
+ * The Reminders row's state. Call on a background thread. "Late" means
+ * exact alarms are not allowed, "blocked" that notifications can't be shown.
+ */
+private fun remindersRow(context: Context, db: Database): RemindersRow = when {
+    !db.reminderSettings().enabled -> RemindersRow.OFF
+    !ReminderNotifications.canShow(context) -> RemindersRow.BLOCKED
+    !ReminderPermissions.exactAlarmsAllowed(context) -> RemindersRow.LATE
+    else -> RemindersRow.ON
+}
+
+/** The words for the Reminders row's state ("on, may be late"). */
+@Composable
+private fun remindersRowText(row: RemindersRow): String = stringResource(
+    when (row) {
+        RemindersRow.OFF -> R.string.value_off
+        RemindersRow.ON -> R.string.value_on
+        RemindersRow.LATE -> R.string.reminders_state_late
+        RemindersRow.BLOCKED -> R.string.reminders_state_blocked
+    },
+)
 
 /** A heading line inside the settings box, muted like the form's labels. */
 @Composable
@@ -277,10 +329,11 @@ private fun ThemeLine(look: TuiLook, theme: ThemeInfo, chosen: Boolean, onClick:
  * One setting: "  Label       ‹ value ›", in the form's style. The label is
  * muted; the arrows are accent-coloured, with tap areas of at least 48dp.
  * [onStep] runs with `true` for "›" (forward) and `false` for "‹" (back);
- * settings with two values switch either way.
+ * settings with two values switch either way. Also used by the Reminders
+ * page.
  */
 @Composable
-private fun ChoiceRow(look: TuiLook, label: String, value: String, onStep: (forward: Boolean) -> Unit) {
+internal fun ChoiceRow(look: TuiLook, label: String, value: String, onStep: (forward: Boolean) -> Unit) {
     val accent = look.color(ColorSlot.ACCENT)
     Row(
         modifier = Modifier

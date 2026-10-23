@@ -202,6 +202,11 @@ dependencies {
     // JNA must be the Android flavour (`@aar`), which bundles the native pieces
     // for each CPU type. A plain jar would not work on a phone.
     implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
+
+    // Unit tests that run on the computer's own Java (no phone or emulator):
+    // `./gradlew :app:testDebugUnitTest`. `testImplementation` means the
+    // library is used only to build and run those tests, never shipped.
+    testImplementation(libs.junit)
 }
 
 // Runs scripts/build-rust.sh: compiles the Rust library for Android and writes

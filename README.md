@@ -22,13 +22,55 @@ app and pinned to one commit.
   through [UniFFI](https://mozilla.github.io/uniffi-rs/). The themes, icon
   table, banner and the decisions about what the list shows all come from core,
   so both apps look and behave the same.
-- **Privacy:** the only permission is `INTERNET` (a later version adds the
-  permissions reminders need). Everything is stored on the device. Syncing to
+- **Privacy:** everything is stored on the device. The permissions are
+  `INTERNET` (sync) and, for reminders, `POST_NOTIFICATIONS`,
+  `SCHEDULE_EXACT_ALARM` and `RECEIVE_BOOT_COMPLETED`. Syncing to
   your own CouchDB server is optional, off by default, and `https://` only.
   The server needs a certificate from a public certificate authority (such as
   Let's Encrypt): the app checks it against Mozilla's list built into the app,
   so self-signed and private-CA servers are not supported. The full policy is
   in [PRIVACY.md](PRIVACY.md).
+
+## Reminders
+
+Off until switched on in **Settings → Reminders ›**. Core plans them (the same
+rules the terminal app will use) and the phone turns them into Android alarms
+and notifications; nothing about them leaves the phone.
+
+- **What reminds:** a task with a due time, at that time (plus an earlier one
+  if **Lead** is set); a repeating task also at each later scheduled time
+  while it stays open, so a missed Monday 2 PM still reminds on Tuesday at
+  2 PM; a task due on a day without a time, at **Day time** (09:00) that day;
+  and, if **Digest** is on, a daily list of overdue tasks at Day time. Never
+  events, completed or deleted tasks, or anything on the demo database.
+- **Done** on a notification completes the task like a swipe (a repeating
+  task gets its next instance). The digest has no Done.
+- **Exact or late:** with *Alarms & reminders* allowed for the app (off by
+  default on Android 14 and later), reminders come at the minute. Without it
+  they use inexact alarms, which Android may deliver up to about an hour
+  late; the Settings row then says "on, may be late" and the Reminders page
+  offers the setting.
+- **48 hours at a time:** the app sets alarms for the next 48 hours and plans
+  again after every change, sync, time or time-zone change, app update and
+  restart, each time the app is opened, and once a day on its own.
+- **After a restart, nothing fires until the phone is first unlocked:** the
+  database is in storage Android keeps locked until then, so the alarms are
+  set again only after the first unlock. A reminder whose time passed while
+  the phone was off or locked is not replayed.
+- **Force stop** (in the system's app settings) wipes the app's alarms until
+  the app is opened again.
+- **Daylight saving:** a reminder in the hour the clocks skip comes just after
+  it (02:30 becomes 03:30); in the hour that happens twice, at the first one.
+
+To see the alarms the app has set, with the phone or emulator connected:
+
+```bash
+adb shell dumpsys alarm | grep -B1 -A4 com.shanetalkstech.zerohour
+```
+
+Each reminder shows as `REMINDER_FIRE` with its time (`origWhen`), plus one
+`REMINDER_REFILL` about a day ahead. Add `-s <serial>` after `adb` when more
+than one device is connected (`adb devices` lists them).
 
 ## Building
 
@@ -140,8 +182,11 @@ re-signs what users download with its own app signing key.
    is unsigned too. Debug builds, including Android Studio's Run button, never
    need the key.
 4. **In Play Console,** use the public link to `PRIVACY.md` as the privacy
-   policy. The app collects no data itself (see that file) and asks only for
-   `INTERNET`.
+   policy. The app collects no data itself (see that file). Its permissions
+   are `INTERNET`, `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM` (not
+   `USE_EXACT_ALARM`, which Play keeps for alarm-clock and calendar apps) and
+   `RECEIVE_BOOT_COMPLETED`. Re-check Play's exact-alarm policy wording at
+   each release.
 
 Code shrinking (R8) is off on purpose; the reason is next to `isMinifyEnabled`
 in `app/build.gradle.kts`.
@@ -165,6 +210,13 @@ cd rust
 cargo test
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
+```
+
+Kotlin unit tests (plain JVM, no phone needed; the daylight-saving rule and
+the alarm request codes):
+
+```bash
+./gradlew :app:testDebugUnitTest
 ```
 
 ## Licence

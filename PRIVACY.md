@@ -12,9 +12,17 @@ Your tasks, events, notes, completion history and settings are stored in the
 app's private storage on your phone. They are not copied to Google's cloud
 backups, and they are not copied to a new phone during Android's setup
 transfer either: the app excludes all of its data from both. Uninstalling the
-app removes them. The app asks for one permission
-only: `INTERNET` (a later version that adds reminders will also ask to post
-notifications and to schedule exact alarms; this policy will be updated then).
+app removes them.
+
+The app asks for these permissions:
+
+- `INTERNET`: only for sync to your own server (see below).
+- `POST_NOTIFICATIONS`: to show reminders. Asked for only when you switch
+  reminders on.
+- `SCHEDULE_EXACT_ALARM` ("Alarms & reminders"): so a reminder comes at its
+  minute. Optional; without it reminders may come up to about an hour late.
+- `RECEIVE_BOOT_COMPLETED`: to set the reminder alarms again after the phone
+  restarts.
 
 ## What the app sends over the network
 
@@ -38,9 +46,14 @@ to enter it again. Sync is disabled for the sample
 
 ## Reminders and notifications
 
-Reminders (a later version) are scheduled and shown entirely on your device by
-Android's own alarm and notification system. No reminder, and nothing about when
-your tasks or events are due, is sent anywhere.
+Reminders are off until you switch them on. They are worked out on your phone
+from your tasks and shown by Android's own alarm and notification system. No
+reminder, and nothing about when your tasks or events are due, is sent
+anywhere. The reminder settings are stored on this phone only and are never
+synced. To know which alarms to cancel, the app keeps a list of the alarms it
+has set (task IDs and times, no titles) in a folder Android never backs up or
+copies to a new phone. Reminder notifications show the task's title, also on
+the lock screen; Android's own lock-screen notification settings apply.
 
 ## Files you export
 

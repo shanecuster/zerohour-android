@@ -40,10 +40,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import com.shanetalkstech.zerohour.R
 import com.shanetalkstech.zerohour.data.DatabaseHolder
+import com.shanetalkstech.zerohour.data.DataChanges
 import com.shanetalkstech.zerohour.data.SyncRunner
 import com.shanetalkstech.zerohour.data.SyncState
 import com.shanetalkstech.zerohour.data.explanation
 import com.shanetalkstech.zerohour.data.nowText
+import com.shanetalkstech.zerohour.reminders.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -114,7 +116,7 @@ private data class OpenForm(val form: ItemForm, val adding: Boolean)
 /** A line swiped left, waiting for "delete" or "keep": its [id] and [title]. */
 private data class PendingDelete(val id: String, val title: String)
 
-/** Which full page is showing: the main screen with its tabs, settings or sync. */
+/** Which full page is showing: the main screen with its tabs, settings, sync or reminders. */
 private enum class Page {
     /** The main screen (header, the chosen tab, the tab bar). */
     MAIN,
@@ -124,6 +126,9 @@ private enum class Page {
 
     /** The sync page, opened from "Sync ›" on the settings page. */
     SYNC,
+
+    /** The reminders page, opened from "Reminders ›" on the settings page. */
+    REMINDERS,
 }
 
 /**
@@ -189,6 +194,9 @@ fun MainRoute() {
                 Status(e.explanation(), ColorSlot.DANGER)
             }
             reloads++
+            // A completed or deleted task must lose its reminder alarms (and
+            // a repeating one's next instance gets its own).
+            ReminderScheduler.replanSoon(context)
         }
     }
 
@@ -232,6 +240,18 @@ fun MainRoute() {
             syncState is SyncState.Failed
         if (finished) {
             syncResults.firstOrNull()?.let { status = Status(it.text, it.slot) }
+            reloads++
+        }
+    }
+
+    // Changes made outside this screen (a reminder's "Done" button while the
+    // app is open) read everything again too. The first value is skipped:
+    // the screen loads on its own when it opens.
+    val outsideChanges by DataChanges.version.collectAsState()
+    var seenChanges by remember { mutableIntStateOf(outsideChanges) }
+    LaunchedEffect(outsideChanges) {
+        if (outsideChanges != seenChanges) {
+            seenChanges = outsideChanges
             reloads++
         }
     }
@@ -303,6 +323,9 @@ fun MainRoute() {
                             openForm = null
                             status = message?.let { Status(it) }
                             reloads++
+                            // A message means it was saved: an added or edited
+                            // task may need new or moved reminders.
+                            if (message != null) ReminderScheduler.replanSoon(context)
                         },
                     )
                 } else if (page == Page.SETTINGS) {
@@ -311,16 +334,32 @@ fun MainRoute() {
                         settingsIcon = s.screen.settingsIcon,
                         // Read everything again, so a new theme, icon set,
                         // time format or database shows at once.
-                        onChanged = { reloads++ },
+                        // Re-plan too: the 12/24-hour setting changes the
+                        // reminders' texts.
+                        onChanged = {
+                            reloads++
+                            ReminderScheduler.replanSoon(context)
+                        },
                         // The other database: read everything again, and drop
                         // the bottom row's message (such as "Synced: 0 in, 23
-                        // out."), which was about the database just left.
+                        // out."), which was about the database just left. Its
+                        // reminders replace the old ones (none on the demo).
                         onDataSwitched = {
                             status = null
                             reloads++
+                            ReminderScheduler.replanSoon(context)
                         },
                         onOpenSync = { page = Page.SYNC },
+                        onOpenReminders = { page = Page.REMINDERS },
                         onClose = { page = Page.MAIN },
+                    )
+                } else if (page == Page.REMINDERS) {
+                    // Closing goes back to the settings page it came from.
+                    // The page saves and re-plans each change itself.
+                    ReminderPage(
+                        look = look,
+                        columns = columns,
+                        onClose = { page = Page.SETTINGS },
                     )
                 } else if (page == Page.SYNC) {
                     // Closing goes back to the settings page it came from,
