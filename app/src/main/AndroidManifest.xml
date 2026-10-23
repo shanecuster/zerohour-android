@@ -17,6 +17,8 @@
 
     <application
         android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.Zerohour"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -38,8 +40,10 @@
           setting cannot see, so the Rust side refuses non-https addresses
           itself; this is a second guard.
 
-          No android:icon yet: Android supplies a default launcher icon. The
-          real icon is part of release preparation (the last plan step).
+          icon / roundIcon: the adaptive hourglass icon in res/mipmap-anydpi
+          (artwork and licence: third_party/icon/README.md). Debug builds
+          replace its foreground with a badged one (src/debug/res), so the
+          .debug app is easy to tell apart on the home screen.
         -->
 
         <!--

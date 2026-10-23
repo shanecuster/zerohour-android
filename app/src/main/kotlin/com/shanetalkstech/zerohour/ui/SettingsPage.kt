@@ -89,8 +89,10 @@ private data class SettingsState(val settings: SettingsScreen, val demo: Boolean
  * terminal app's picker, so themes can be compared before choosing.
  *
  * The "Data" row exists only in debug builds: it switches between the demo
- * database and a real one. While the demo is in use the "Sync" row is greyed
- * out, because the demo never syncs. [onOpenSync] opens the sync screen,
+ * database and a real one, then runs [onDataSwitched] (instead of
+ * [onChanged]), so the app can also drop messages that belonged to the other
+ * database. While the demo is in use the "Sync" row is greyed out, because
+ * the demo never syncs. [onOpenSync] opens the sync screen,
  * [onClose] closes this one (the back gesture does too).
  */
 @Composable
@@ -98,6 +100,7 @@ fun SettingsPage(
     look: TuiLook,
     settingsIcon: String,
     onChanged: () -> Unit,
+    onDataSwitched: () -> Unit,
     onOpenSync: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -196,7 +199,7 @@ fun SettingsPage(
                         scope.launch {
                             withContext(Dispatchers.IO) { DatabaseHolder.chooseDemo(context, !current.demo) }
                             version++
-                            onChanged()
+                            onDataSwitched()
                         }
                     }
                 }

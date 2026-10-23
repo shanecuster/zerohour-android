@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launcher icon's monochrome layer, for "themed icons" (Android 13 and
+  later, when the user turns them on). The launcher ignores the colours and
+  paints the shapes in the colours of the user's wallpaper theme, so only the
+  shapes matter: the same hourglass and sand as ic_launcher_foreground.xml,
+  at the same 90% scale, in one colour.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.9"
+        android:scaleY="0.9">
+        <path
+            android:pathData="M176,136 H336 L256,256 L336,376 H176 L256,256 Z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="44"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M230,342 H282 L256,306 Z"
+            android:fillColor="#FFFFFFFF"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="10"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

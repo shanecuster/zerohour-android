@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only: replaces src/main's foreground with the same hourglass
+  plus a peach badge, so the .debug app is easy to tell from the release app.
+  Gradle uses this file instead of the one in src/main/res for debug
+  builds, because the debug source set overrides resources of the same name.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.9"
+        android:scaleY="0.9">
+        <!-- The outline: top bar, waist and bottom bar as one closed path. -->
+        <path
+            android:pathData="M176,136 H336 L256,256 L336,376 H176 L256,256 Z"
+            android:strokeColor="@color/ic_launcher_hourglass"
+            android:strokeWidth="44"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <!-- The sand settled in the bottom half. -->
+        <path
+            android:pathData="M230,342 H282 L256,306 Z"
+            android:fillColor="@color/ic_launcher_sand"
+            android:strokeColor="@color/ic_launcher_sand"
+            android:strokeWidth="10"
+            android:strokeLineJoin="round" />
+    </group>
+    <!--
+      Debug builds only: a round badge to the right of the hourglass's waist,
+      inside the 66dp safe zone (its centre is 96 units from the middle and
+      its radius 28, against a safe-zone radius of about 156) and clear of
+      the outline. It is outside the 90% group, so it is not scaled.
+    -->
+    <path
+        android:pathData="M324,256 A28,28 0 1,0 380,256 A28,28 0 1,0 324,256 Z"
+        android:fillColor="@color/ic_launcher_debug_badge" />
+</vector>

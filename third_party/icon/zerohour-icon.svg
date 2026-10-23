@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Zerohour app icon, master artwork (option C2).
+  512x512 full-bleed square. Key shapes stay inside the central ~66% so
+  Android's circle and squircle masks never clip them.
+  Palette: Catppuccin Macchiato (base #24273a, mauve #c6a0f6, green #a6da95).
+-->
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background: Catppuccin Macchiato "base" -->
+  <rect width="512" height="512" fill="#24273a"/>
+  <!-- Hourglass outline in mauve: top bar, waist and bottom bar as one closed path -->
+  <path d="M176,136 H336 L256,256 L336,376 H176 L256,256 Z" fill="none" stroke="#c6a0f6" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Sand settled in the bottom half, in green -->
+  <path d="M230,342 H282 L256,306 Z" fill="#a6da95" stroke="#a6da95" stroke-width="10" stroke-linejoin="round"/>
+</svg>

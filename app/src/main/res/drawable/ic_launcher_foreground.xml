@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launcher icon's foreground layer: the hourglass and its sand, from
+  third_party/icon/zerohour-icon.svg (the two paths only; the SVG's background
+  rectangle is the separate background layer).
+
+  An adaptive icon is drawn on a 108dp square, but launchers only promise to
+  show the circle of 66dp in its middle (the "safe zone"); the rest may be
+  cut off by the circle, squircle or rounded-square mask. The artwork's 512
+  units map onto the 108dp, and the group scales the shapes to 90% around the
+  centre (256, 256) so the hourglass's corners stay inside that circle.
+
+  Round line caps and joins are kept, as in the SVG.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.9"
+        android:scaleY="0.9">
+        <!-- The outline: top bar, waist and bottom bar as one closed path. -->
+        <path
+            android:pathData="M176,136 H336 L256,256 L336,376 H176 L256,256 Z"
+            android:strokeColor="@color/ic_launcher_hourglass"
+            android:strokeWidth="44"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <!-- The sand settled in the bottom half. -->
+        <path
+            android:pathData="M230,342 H282 L256,306 Z"
+            android:fillColor="@color/ic_launcher_sand"
+            android:strokeColor="@color/ic_launcher_sand"
+            android:strokeWidth="10"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>
