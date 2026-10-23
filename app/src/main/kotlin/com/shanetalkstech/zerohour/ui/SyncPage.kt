@@ -3,6 +3,7 @@ package com.shanetalkstech.zerohour.ui
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,11 +36,15 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import com.shanetalkstech.zerohour.R
 import com.shanetalkstech.zerohour.data.DatabaseHolder
@@ -418,6 +423,12 @@ private enum class FieldKind {
  * One text field: "  Label      value", like the form's. The value is a
  * single line in the theme's text colour with an accent cursor; when it is
  * empty and not being typed in, [placeholder] shows muted.
+ *
+ * A value too long for the line (a long server address) shows its END while
+ * it is not being edited: "…ample.org/couch", like the terminal app's sync
+ * popup, so the part that differs is visible. Tapping it shows the whole
+ * text with the cursor at the end, and the field scrolls sideways to keep
+ * the cursor in view while typing. The password keeps its dots instead.
  */
 @Composable
 private fun SyncField(
@@ -429,6 +440,19 @@ private fun SyncField(
     placeholder: String? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
+    // The field keeps its own copy of the text together with the cursor
+    // position (`TextFieldValue`), so the cursor can be put at the end when
+    // the field is tapped. Every change is passed on with [onValue].
+    var field by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    // The last [value] seen. A new one that differs from what is in the
+    // field came from the page itself (the saved details being loaded), so
+    // the field takes it. Checked while drawing, as in the add/edit form, so
+    // quick typing is never overwritten by an older value.
+    var seen by remember { mutableStateOf(value) }
+    if (value != seen) {
+        seen = value
+        if (field.text != value) field = TextFieldValue(value, TextRange(value.length))
+    }
     val keyboard = when (kind) {
         FieldKind.URL -> KeyboardOptions(
             autoCorrectEnabled = false,
@@ -455,32 +479,86 @@ private fun SyncField(
             text = "  " + label.padEnd(LABEL_CELLS) + " ",
             style = look.text.copy(color = look.color(if (focused) ColorSlot.ACCENT else ColorSlot.MUTED)),
         )
-        BasicTextField(
-            value = value,
-            onValueChange = onValue,
-            singleLine = true,
-            textStyle = look.text.copy(color = look.color(ColorSlot.FOREGROUND)),
-            cursorBrush = SolidColor(look.color(ColorSlot.ACCENT)),
-            keyboardOptions = keyboard,
-            // Dots for the password, so it is never on screen.
-            visualTransformation = if (kind == FieldKind.PASSWORD) {
-                PasswordVisualTransformation()
-            } else {
-                VisualTransformation.None
-            },
-            modifier = Modifier
-                .weight(1f)
-                .onFocusChanged { focused = it.isFocused },
-            decorationBox = { innerTextField ->
-                Box {
-                    if (placeholder != null && value.isEmpty() && !focused) {
-                        BasicText(text = placeholder, style = look.text.copy(color = look.color(ColorSlot.MUTED)))
+        // `BoxWithConstraints` says how wide the value's space is, so the
+        // field knows how many characters fit on its line.
+        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+            val cells = (maxWidth / look.cell.width).toInt()
+            BasicTextField(
+                value = field,
+                onValueChange = { new ->
+                    field = new
+                    if (new.text != value) onValue(new.text)
+                },
+                singleLine = true,
+                textStyle = look.text.copy(color = look.color(ColorSlot.FOREGROUND)),
+                cursorBrush = SolidColor(look.color(ColorSlot.ACCENT)),
+                keyboardOptions = keyboard,
+                // What is drawn (the stored text is never changed): dots for
+                // the password, so it is never on screen; the end of a value
+                // too long for the line while it is not being edited.
+                visualTransformation = when {
+                    kind == FieldKind.PASSWORD -> PasswordVisualTransformation()
+                    !focused && field.text.length > cells -> TailTransformation(cells)
+                    else -> VisualTransformation.None
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged {
+                        // Just tapped: put the cursor at the end, so the end
+                        // of a long value stays in view.
+                        if (it.isFocused && !focused) {
+                            field = field.copy(selection = TextRange(field.text.length))
+                        }
+                        focused = it.isFocused
+                    },
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (placeholder != null && field.text.isEmpty() && !focused) {
+                            BasicText(text = placeholder, style = look.text.copy(color = look.color(ColorSlot.MUTED)))
+                        }
+                        innerTextField()
                     }
-                    innerTextField()
-                }
-            },
-        )
+                },
+            )
+        }
     }
+}
+
+/**
+ * Draws a text longer than [cells] characters as "…" followed by its last
+ * `cells - 1` characters, so a long value shows its end on one line. Only the
+ * drawing changes; the text itself is untouched.
+ *
+ * A `VisualTransformation` must also say how positions in the real text map
+ * to positions in the drawn text and back (an `OffsetMapping`), so a tap
+ * lands in a sensible place: everything hidden behind the "…" maps to the
+ * "…", and every shown character to itself.
+ */
+private class TailTransformation(private val cells: Int) : VisualTransformation {
+    /** Builds the drawn text and the position mapping for [text]. */
+    override fun filter(text: AnnotatedString): TransformedText {
+        val shown = maxOf(cells - 1, 1)
+        // How many characters at the start are hidden behind the "…".
+        val hidden = maxOf(text.length - shown, 0)
+        if (hidden == 0) return TransformedText(text, OffsetMapping.Identity)
+        val drawn = AnnotatedString("…") + text.subSequence(hidden, text.length)
+        val mapping = object : OffsetMapping {
+            /** A position in the real text -> where it is drawn. */
+            override fun originalToTransformed(offset: Int): Int =
+                if (offset <= hidden) 0 else offset - hidden + 1
+
+            /** A drawn position -> the position in the real text. */
+            override fun transformedToOriginal(offset: Int): Int =
+                if (offset == 0) hidden else hidden + offset - 1
+        }
+        return TransformedText(drawn, mapping)
+    }
+
+    /** Two tail transformations are the same when they keep the same number of cells. */
+    override fun equals(other: Any?): Boolean = other is TailTransformation && other.cells == cells
+
+    /** Matches [equals]. */
+    override fun hashCode(): Int = cells
 }
 
 /**
