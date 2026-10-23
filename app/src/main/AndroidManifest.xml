@@ -9,11 +9,31 @@
     <!--
       INTERNET lets the app reach the user's own sync server (an opt-in feature,
       off by default). It is a "normal" permission: Android grants it at install
-      time and never shows a prompt. This is the ONLY permission for now; the
-      later reminders step adds POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM and
-      RECEIVE_BOOT_COMPLETED.
+      time and never shows a prompt.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      The reminder permissions. Reminders are off until switched on in
+      Settings > Reminders, and everything about them stays on the phone.
+
+      POST_NOTIFICATIONS: show reminder notifications. On Android 13 and later
+      the app asks when reminders are switched on; older versions grant it at
+      install (the user can still block notifications in the system settings).
+
+      SCHEDULE_EXACT_ALARM: fire a reminder at its minute ("Alarms & reminders"
+      in the system settings). Off by default on Android 14 and later until the
+      user allows it; without it, reminders use inexact alarms, which may come
+      up to about an hour late. Not USE_EXACT_ALARM: Google Play keeps that one
+      for alarm-clock and calendar apps.
+
+      RECEIVE_BOOT_COMPLETED: set the alarms again after the phone restarts
+      (Android forgets every alarm on a restart). A normal permission, granted
+      at install.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:label="@string/app_name"
@@ -76,6 +96,39 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Reminder receivers (code in reminders/). A receiver is a piece of
+          the app Android wakes up to handle one message, even when the app
+          is not open.
+
+          The alarm and Done receivers are exported="false": only the app's
+          own alarms and notification buttons can reach them.
+        -->
+        <receiver
+            android:name=".reminders.ReminderAlarmReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".reminders.ReminderDoneReceiver"
+            android:exported="false" />
+
+        <!--
+          Re-plans the alarms after system events: a restart, the clock or
+          time zone changing, an app update, and exact alarms being allowed.
+          exported="true" so Android can deliver them; they are protected
+          broadcasts that only the system can send.
+        -->
+        <receiver
+            android:name=".reminders.ReminderEventsReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
