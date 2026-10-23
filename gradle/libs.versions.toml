@@ -14,6 +14,10 @@ composeBom = "2026.02.01"
 # (how Kotlin loads and calls the Rust library).
 coroutines = "1.10.2"
 jna = "5.17.0"
+# Added for zerohour's reminders: JUnit 4 runs the plain-JVM unit tests in
+# app/src/test (the daylight-saving rule and the alarm request codes). It is
+# a test-only dependency: it never goes into the app.
+junit = "4.13.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -26,6 +30,7 @@ androidx-compose-foundation = { group = "androidx.compose.foundation", name = "f
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
