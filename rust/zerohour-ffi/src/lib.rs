@@ -39,6 +39,9 @@
 //! * **Sync settings** (`sync` module) -- save the server details (https
 //!   only), test the connection and reset the sync state. The password is
 //!   passed in by Kotlin, never stored here. The demo database never syncs.
+//! * **Reminders** (`reminders` module) -- the reminder settings (on/off,
+//!   lead time, day time, overdue digest), read and saved through core's
+//!   `ReminderSettings`. Never synced: each device decides for itself.
 //! * **Errors** (`error` module) -- the one `FfiError` type Kotlin catches.
 //!
 //! Step 10 adds "sync now". All the real logic lives in
@@ -63,6 +66,7 @@ pub mod database;
 pub mod error;
 pub mod form;
 pub mod items;
+pub mod reminders;
 pub mod screen;
 pub mod settings;
 pub mod stats;
