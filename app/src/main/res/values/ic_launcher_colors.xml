@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launcher icon's colours, from the artwork in third_party/icon/
+  (Catppuccin Macchiato palette). These are the icon's own colours: the app's
+  screens never use them (those colours come from zerohour's themes).
+-->
+<resources>
+    <!-- Background layer: Catppuccin Macchiato "base", a dark navy. -->
+    <color name="ic_launcher_background">#24273A</color>
+    <!-- The hourglass outline: Macchiato "mauve". -->
+    <color name="ic_launcher_hourglass">#C6A0F6</color>
+    <!-- The sand in the bottom half: Macchiato "green". -->
+    <color name="ic_launcher_sand">#A6DA95</color>
+</resources>
