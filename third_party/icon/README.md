@@ -9,9 +9,9 @@ background, in the Catppuccin Macchiato palette (base `#24273a`, mauve
 - `zerohour-icon.svg` (this folder): the master artwork, a 512×512 square.
   Its shapes stay inside the middle of the square, so Android's icon masks
   never cut them.
-- `fastlane/metadata/android/en-US/images/icon.png`: the 512×512 store icon.
-  The original was supplied as a WebP image; it was converted to PNG (with an
-  alpha channel, as Google Play asks) without changing its pixels.
+- `fastlane/metadata/android/en-US/images/icon.png`: the 512×512 store icon,
+  a PNG rendered from the SVG. Its colours are exactly as rendered; only a
+  fully opaque alpha channel was added (32-bit RGBA), as Google Play asks.
 
 The Android launcher icon is drawn from the SVG, not from the PNG:
 
