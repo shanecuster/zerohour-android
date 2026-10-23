@@ -154,7 +154,7 @@
     <string name="sync_password_unreadable">The saved password could not be read. Enter the password again.</string>
     <string name="sync_password_saved_info">Password: saved, encrypted with the Android Keystore</string>
     <string name="sync_password_none_info">Password: not saved</string>
-    <string name="sync_documents">Documents synced: %1$s</string>
+    <string name="sync_now_button">[ sync now ]</string>
     <string name="sync_test_button">[ test connection ]</string>
     <string name="sync_reset_button">[ reset sync state… ]</string>
     <string name="sync_reset_yes">[ reset ]</string>

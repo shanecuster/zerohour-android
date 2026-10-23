@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +31,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -43,6 +45,8 @@ import com.shanetalkstech.zerohour.R
 import com.shanetalkstech.zerohour.data.DatabaseHolder
 import com.shanetalkstech.zerohour.data.PasswordStore
 import com.shanetalkstech.zerohour.data.SavedPassword
+import com.shanetalkstech.zerohour.data.SyncRunner
+import com.shanetalkstech.zerohour.data.SyncState
 import com.shanetalkstech.zerohour.data.explanation
 import com.shanetalkstech.zerohour.data.nowText
 import kotlin.math.abs
@@ -52,6 +56,7 @@ import kotlinx.coroutines.withContext
 import uniffi.zerohour_ffi.ColorSlot
 import uniffi.zerohour_ffi.FfiException
 import uniffi.zerohour_ffi.SyncConfig
+import uniffi.zerohour_ffi.SyncStatus
 import uniffi.zerohour_ffi.syncAccount
 
 /** The labels in front of the fields are padded to this many cells ("Server URL"). */
@@ -73,13 +78,15 @@ private data class SyncMessage(val text: String, val slot: ColorSlot)
  * │   Password   (saved)                 │
  * │                                      │
  * │ [ save ]                             │
+ * │ [ sync now ]                         │
  * │ [ test connection ]                  │
  * │ [ reset sync state… ]                │
  * │ [ close ]                            │
  * │                                      │
  * │ Password: saved, encrypted with ...  │
- * │ Documents synced: 0                  │
- * │ Connected. The database has 12 ...   │
+ * │ Status: last synced Oct 22 2:30 PM · │
+ * │ 12 documents synced                  │
+ * │ Synced: 3 in, 1 out.                 │
  * ╰──────────────────────────────────────╯
  * ```
  *
@@ -95,7 +102,11 @@ private data class SyncMessage(val text: String, val slot: ColorSlot)
  * - A saved password that can no longer be decrypted is removed, and the
  *   page asks for it again instead of failing.
  *
- * "Sync now" comes in the next step; this page only stores the details.
+ * - "Sync now" syncs with the SAVED details (Save first after a change), on
+ *   the app-wide [SyncRunner], so the header's indicator shows it too. A
+ *   phone that has never synced but has items asks first, as the header
+ *   does. A tap while a sync runs says "Already syncing…".
+ *
  * While the demo database is in use, everything is greyed out (the demo
  * never syncs). [onClose] closes the page (the back gesture does too).
  */
@@ -115,7 +126,14 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
 
     var loaded by remember { mutableStateOf(false) }
     var demo by remember { mutableStateOf(false) }
-    var syncedDocs by remember { mutableStateOf(0uL) }
+    // The sync status (last synced, documents, first-sync warning).
+    var status by remember { mutableStateOf<SyncStatus?>(null) }
+    // Where "Sync now" stands, from the app-wide runner.
+    val syncState by SyncRunner.state.collectAsState()
+    // True after "Sync now" was tapped here, so its result shows under the
+    // buttons (until another button is used).
+    var showSyncResult by remember { mutableStateOf(false) }
+    var confirmFirstSync by remember { mutableStateOf(false) }
     // Whether a password is saved for the details as they were last saved.
     var passwordSaved by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<SyncMessage?>(null) }
@@ -142,7 +160,9 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
     LaunchedEffect(version) {
         try {
             val (screen, saved) = withContext(Dispatchers.IO) {
-                val s = DatabaseHolder.get(context).syncScreen()
+                val db = DatabaseHolder.get(context)
+                val s = db.syncScreen()
+                status = db.syncStatus(nowText())
                 s to PasswordStore.load(context, syncAccount(s.config))
             }
             if (!loaded) {
@@ -153,12 +173,27 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
                 loaded = true
             }
             demo = screen.demo
-            syncedDocs = screen.syncedDocs
             passwordSaved = saved is SavedPassword.Found
             if (saved is SavedPassword.Unreadable) message = SyncMessage(enterAgain, ColorSlot.WARN)
         } catch (e: FfiException) {
             message = SyncMessage(e.explanation(), ColorSlot.DANGER)
         }
+    }
+
+    // When a sync finishes, read the status again (last synced, documents).
+    LaunchedEffect(syncState) {
+        if (syncState !is SyncState.Running && syncState !is SyncState.Idle) version++
+    }
+
+    val alreadySyncing = stringResource(R.string.sync_already_running)
+
+    // Starts "Sync now" with the saved details, unless one is running.
+    fun startSync() {
+        focusManager.clearFocus()
+        clockWarning = null
+        message = null
+        showSyncResult = true
+        if (!SyncRunner.start(context)) message = SyncMessage(alreadySyncing, ColorSlot.MUTED)
     }
 
     // Runs [action] on a background thread unless something is already
@@ -167,6 +202,7 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
     fun runJob(action: suspend () -> SyncMessage) {
         if (busy) return
         busy = true
+        showSyncResult = false
         focusManager.clearFocus()
         scope.launch {
             message = try {
@@ -270,7 +306,28 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
             )
             Spacer(Modifier.height(look.cell.rows(1)))
 
-            if (confirmReset) {
+            if (confirmFirstSync) {
+                // The header's first-sync question, inline like the reset one.
+                val items = status?.localItems?.toInt() ?: 0
+                BasicText(
+                    text = pluralStringResource(R.plurals.first_sync_question, items, items),
+                    style = look.text.copy(color = look.color(ColorSlot.WARN)),
+                )
+                Row {
+                    TapText(
+                        look,
+                        stringResource(R.string.first_sync_continue),
+                        look.color(ColorSlot.WARN),
+                        bold = true,
+                        onClick = {
+                            confirmFirstSync = false
+                            startSync()
+                        },
+                    )
+                    Spacer(Modifier.width(look.cell.columns(2)))
+                    TapText(look, stringResource(R.string.cancel_button), foreground, onClick = { confirmFirstSync = false })
+                }
+            } else if (confirmReset) {
                 // The terminal app's question, with buttons for its y and n.
                 BasicText(
                     text = stringResource(R.string.sync_reset_question),
@@ -295,6 +352,18 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
                 }
             } else {
                 TapText(look, stringResource(R.string.save_button), accent, onClick = ::save, bold = true)
+                TapText(
+                    look,
+                    stringResource(R.string.sync_now_button),
+                    foreground,
+                    onClick = {
+                        if (status?.firstSyncWarning == true && syncState != SyncState.Running) {
+                            confirmFirstSync = true
+                        } else {
+                            startSync()
+                        }
+                    },
+                )
                 TapText(look, stringResource(R.string.sync_test_button), foreground, onClick = ::test)
                 TapText(
                     look,
@@ -314,13 +383,20 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
                 look,
                 stringResource(if (passwordSaved) R.string.sync_password_saved_info else R.string.sync_password_none_info),
             )
-            MutedText(look, stringResource(R.string.sync_documents, syncedDocs.toString()))
+            status?.let { MutedText(look, syncStatusLine(it, syncState)) }
             clockWarning?.let {
                 BasicText(text = it, style = look.text.copy(color = look.color(ColorSlot.WARN)))
             }
             message?.let {
                 Spacer(Modifier.height(look.cell.rows(1)))
                 BasicText(text = it.text, style = look.text.copy(color = look.color(it.slot)))
+            }
+            // What the last "Sync now" from this page did: every line, most
+            // important first.
+            if (showSyncResult) {
+                for (line in syncResultLines(syncState)) {
+                    BasicText(text = line.text, style = look.text.copy(color = look.color(line.slot)))
+                }
             }
         }
     }
