@@ -312,6 +312,13 @@ fun MainRoute() {
                         // Read everything again, so a new theme, icon set,
                         // time format or database shows at once.
                         onChanged = { reloads++ },
+                        // The other database: read everything again, and drop
+                        // the bottom row's message (such as "Synced: 0 in, 23
+                        // out."), which was about the database just left.
+                        onDataSwitched = {
+                            status = null
+                            reloads++
+                        },
                         onOpenSync = { page = Page.SYNC },
                         onClose = { page = Page.MAIN },
                     )
