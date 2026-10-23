@@ -154,7 +154,7 @@
     <string name="sync_password_unreadable">The saved password could not be read. Enter the password again.</string>
     <string name="sync_password_saved_info">Password: saved, encrypted with the Android Keystore</string>
     <string name="sync_password_none_info">Password: not saved</string>
-    <string name="sync_documents">Documents synced: %1$s</string>
+    <string name="sync_now_button">[ sync now ]</string>
     <string name="sync_test_button">[ test connection ]</string>
     <string name="sync_reset_button">[ reset sync state… ]</string>
     <string name="sync_reset_yes">[ reset ]</string>
@@ -167,4 +167,36 @@
     <!-- After a test, when the clocks differ by more than a minute. %1$s is minutes. -->
     <string name="sync_clock_ahead">⚠ This phone\'s clock is %1$s min ahead of the server\'s. The newest edit wins a conflict, so set the phone\'s time to automatic.</string>
     <string name="sync_clock_behind">⚠ This phone\'s clock is %1$s min behind the server\'s. The newest edit wins a conflict, so set the phone\'s time to automatic.</string>
+
+    <!-- Sync now: why it could not start, and an unexpected failure. -->
+    <string name="sync_no_password">No password saved; enter it on the Sync page.</string>
+    <string name="sync_failed_unexpectedly">The sync failed unexpectedly. Try again.</string>
+
+    <!-- Sync now: the header indicator (short), the Sync page status line,
+         and the messages after a sync. Wording follows the terminal app. -->
+    <string name="sync_never_short">never</string>
+    <string name="sync_offline_short">offline</string>
+    <string name="sync_error_short">error</string>
+    <string name="sync_state_running">syncing…</string>
+    <string name="sync_state_offline">offline (server not reachable)</string>
+    <string name="sync_state_error">error: %1$s</string>
+    <string name="sync_state_synced">last synced %1$s</string>
+    <string name="sync_state_never">never synced</string>
+    <string name="sync_status_line">Status: %1$s · %2$s documents synced</string>
+    <string name="sync_result_done">Synced: %1$s in, %2$s out.</string>
+    <string name="sync_result_error">Sync error: %1$s</string>
+    <plurals name="sync_needs_newer">
+        <item quantity="one">%1$d synced item needs a newer zerohour; update this app.</item>
+        <item quantity="other">%1$d synced items need a newer zerohour; update this app.</item>
+    </plurals>
+    <!-- The one-time question before the first sync on a phone with items. -->
+    <string name="first_sync_title">" First sync "</string>
+    <string name="first_sync_continue">[ continue ]</string>
+    <plurals name="first_sync_question">
+        <item quantity="one">This phone has %1$d item. The first sync adds it to the server\'s; anything typed on both devices will appear twice.</item>
+        <item quantity="other">This phone has %1$d items. The first sync adds them to the server\'s; anything typed on both devices will appear twice.</item>
+    </plurals>
+    <string name="sync_already_running">Already syncing…</string>
+    <!-- The header indicator's name for screen readers. -->
+    <string name="sync_now_description">Sync now</string>
 </resources>

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -39,6 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import com.shanetalkstech.zerohour.R
 import com.shanetalkstech.zerohour.data.DatabaseHolder
+import com.shanetalkstech.zerohour.data.SyncRunner
+import com.shanetalkstech.zerohour.data.SyncState
 import com.shanetalkstech.zerohour.data.explanation
 import com.shanetalkstech.zerohour.data.nowText
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +56,7 @@ import uniffi.zerohour_ffi.ItemForm
 import uniffi.zerohour_ffi.ItemKind
 import uniffi.zerohour_ffi.MainScreen
 import uniffi.zerohour_ffi.StatsScreen
+import uniffi.zerohour_ffi.SyncStatus
 
 /**
  * Below this many columns the screen uses the short texts and drops the
@@ -83,21 +87,23 @@ private sealed interface LoadState {
 
     /**
      * The content, ready to draw: the main [screen] (header, lists, tab bar
-     * icons) and the [stats] for the Stats tab. Both are read together, so
-     * switching tabs never waits for the database.
+     * icons), the [stats] for the Stats tab and the [sync] status for the
+     * header's indicator. All are read together, so switching tabs never
+     * waits for the database.
      */
-    data class Loaded(val screen: MainScreen, val stats: StatsScreen) : LoadState
+    data class Loaded(val screen: MainScreen, val stats: StatsScreen, val sync: SyncStatus) : LoadState
 
     /** Reading failed; [message] says why. */
     data class Failed(val message: String) : LoadState
 }
 
 /**
- * A message in the bottom row of the main screen ("Added "Call mum"").
- * [isError] draws it in the danger colour instead of the "ok" colour, as in
- * the terminal app.
+ * A message in the bottom row of the main screen ("Added "Call mum"") and the
+ * colour slot it is drawn in: "ok" by default, danger for errors (as in the
+ * terminal app), warn for a sync that could not reach the server, muted for
+ * "Already syncing…".
  */
-private data class Status(val text: String, val isError: Boolean = false)
+private data class Status(val text: String, val slot: ColorSlot = ColorSlot.OK)
 
 /**
  * The add/edit form while it is open: the Rust-side [form] object, and
@@ -131,8 +137,10 @@ private enum class Page {
  * countdowns stay current while the app is open, and straight after anything
  * changes.
  *
- * Touch: the tab bar switches between Tasks, Events and Stats; "+ add"
- * above it opens a new form; one tap on a line opens it for editing; swiping
+ * Touch: the tab bar switches between Tasks, Events and Stats; the sync
+ * indicator in the header (when sync is on) runs "Sync now", asking once
+ * first if this phone has never synced but already has items; "+ add"
+ * above the tab bar opens a new form; one tap on a line opens it for editing; swiping
  * a line right completes it; swiping it left asks whether to delete it. The
  * back gesture on the Events or Stats tab goes back to Tasks, and only on
  * Tasks leaves the app.
@@ -154,6 +162,13 @@ fun MainRoute() {
     var status by remember { mutableStateOf<Status?>(null) }
     var openForm by remember { mutableStateOf<OpenForm?>(null) }
     var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
+    // The item count to show in the first-sync question while it is open.
+    var askFirstSync by remember { mutableStateOf<Int?>(null) }
+    // Where "Sync now" stands. `collectAsState` redraws whatever reads it
+    // each time the app-wide runner reports something new.
+    val syncState by SyncRunner.state.collectAsState()
+    val syncResults = syncResultLines(syncState)
+    val alreadySyncing = stringResource(R.string.sync_already_running)
     // The tab on show. `rememberSaveable` also keeps it if Android recreates
     // the screen (for example after the system language changes), not only
     // across redraws.
@@ -171,7 +186,7 @@ fun MainRoute() {
             status = try {
                 withContext(Dispatchers.IO) { action(DatabaseHolder.get(context)) }?.let { Status(it) }
             } catch (e: FfiException) {
-                Status(e.explanation(), isError = true)
+                Status(e.explanation(), ColorSlot.DANGER)
             }
             reloads++
         }
@@ -196,15 +211,37 @@ fun MainRoute() {
                 val form = withContext(Dispatchers.IO) { make(DatabaseHolder.get(context)) }
                 openForm = OpenForm(form, adding)
             } catch (e: FfiException) {
-                status = Status(e.explanation(), isError = true)
+                status = Status(e.explanation(), ColorSlot.DANGER)
                 reloads++
             }
         }
     }
 
+    // Starts "Sync now", unless one is running: then it only says so (a
+    // second sync is never queued).
+    fun startSync() {
+        status = if (SyncRunner.start(context)) null else Status(alreadySyncing, ColorSlot.MUTED)
+    }
+
+    // When a sync finishes: show its most important message in the bottom
+    // row, and read everything again so pulled changes appear at once. It
+    // runs each time the runner reports a new result.
+    LaunchedEffect(syncState) {
+        val finished = syncState is SyncState.Done ||
+            syncState is SyncState.Offline ||
+            syncState is SyncState.Failed
+        if (finished) {
+            syncResults.firstOrNull()?.let { status = Status(it.text, it.slot) }
+            reloads++
+        }
+    }
+
     // Back on the Events or Stats tab returns to Tasks. While the form or the
     // delete box is open, their own back handling applies instead.
-    BackHandler(enabled = tab != Tab.TASKS && page == Page.MAIN && openForm == null && pendingDelete == null) {
+    BackHandler(
+        enabled = tab != Tab.TASKS && page == Page.MAIN && openForm == null &&
+            pendingDelete == null && askFirstSync == null,
+    ) {
         tab = Tab.TASKS
     }
 
@@ -279,8 +316,16 @@ fun MainRoute() {
                         onClose = { page = Page.MAIN },
                     )
                 } else if (page == Page.SYNC) {
-                    // Closing goes back to the settings page it came from.
-                    SyncPage(look = look, onClose = { page = Page.SETTINGS })
+                    // Closing goes back to the settings page it came from,
+                    // and reads everything again, so the header's sync
+                    // indicator follows the details just saved.
+                    SyncPage(
+                        look = look,
+                        onClose = {
+                            page = Page.SETTINGS
+                            reloads++
+                        },
+                    )
                 } else {
                     MainScreenContent(
                         look = look,
@@ -295,6 +340,16 @@ fun MainRoute() {
                         onOpenSettings = {
                             status = null
                             page = Page.SETTINGS
+                        },
+                        syncLine = syncIndicator(s.sync, syncState),
+                        onSync = {
+                            // Ask once before the first sync of a phone that
+                            // already has items; otherwise sync straight away.
+                            if (s.sync.firstSyncWarning && syncState != SyncState.Running) {
+                                askFirstSync = s.sync.localItems.toInt()
+                            } else {
+                                startSync()
+                            }
                         },
                         onAdd = { openFormWith(adding = true) { it.newForm() } },
                         onEdit = { id -> openFormWith(adding = false) { it.editForm(id) } },
@@ -331,6 +386,29 @@ fun MainRoute() {
                             )
                         }
                     }
+                    val items = askFirstSync
+                    if (items != null) {
+                        // Back means "cancel".
+                        BackHandler { askFirstSync = null }
+                        // The same tap-swallowing layer as the delete box.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable(interactionSource = null, indication = null, onClick = {}),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            FirstSyncBox(
+                                look = look,
+                                columns = columns,
+                                items = items,
+                                onContinue = {
+                                    askFirstSync = null
+                                    startSync()
+                                },
+                                onCancel = { askFirstSync = null },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -338,8 +416,8 @@ fun MainRoute() {
 }
 
 /**
- * Reads the main screen and the stats from the database, both as of the same
- * moment, on `Dispatchers.IO` (the pool of
+ * Reads the main screen, the stats and the sync status from the database,
+ * all as of the same moment, on `Dispatchers.IO` (the pool of
  * background threads meant for disk and network work), so the UI never
  * freezes. `suspend` means the caller waits without blocking its thread.
  */
@@ -348,7 +426,7 @@ private suspend fun load(context: Context, narrow: Boolean): LoadState =
         try {
             val db = DatabaseHolder.get(context)
             val now = nowText()
-            LoadState.Loaded(db.mainScreen(now, narrow), db.statsScreen(now))
+            LoadState.Loaded(db.mainScreen(now, narrow), db.statsScreen(now), db.syncStatus(now))
         } catch (e: FfiException) {
             LoadState.Failed(e.explanation())
         }
@@ -392,7 +470,8 @@ private fun millisUntilNextMinute(): Long {
  * character cells fit on the screen. [status] is the message for the bottom row, if any; without one, the row
  * shows the gesture hint ("→ done  ← delete  tap edit"). [tab] is the tab on
  * show, and [onSelectTab] runs when another one is tapped. [onOpenSettings]
- * runs when the gear in the header is tapped. [onAdd] runs when
+ * runs when the gear in the header is tapped. [syncLine] is the header's
+ * sync indicator (null: none), and [onSync] runs when it is tapped. [onAdd] runs when
  * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID),
  * [onComplete] when one is swiped right, [onDelete] when one is swiped left
  * (with its ID and title).
@@ -409,6 +488,8 @@ private fun MainScreenContent(
     tab: Tab,
     onSelectTab: (Tab) -> Unit,
     onOpenSettings: () -> Unit,
+    syncLine: SyncLine?,
+    onSync: () -> Unit,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
     onComplete: (String) -> Unit,
@@ -429,6 +510,8 @@ private fun MainScreenContent(
             today = screen.today,
             settingsIcon = screen.settingsIcon,
             onOpenSettings = onOpenSettings,
+            syncLine = syncLine,
+            onSync = onSync,
             // Drawn on top of what is below it, so the gear's enlarged tap
             // area wins where it reaches down over the banner or a box.
             modifier = Modifier.zIndex(1f),
@@ -480,7 +563,7 @@ private fun MainScreenContent(
                 message = status?.let {
                     AnnotatedString(
                         it.text,
-                        SpanStyle(color = look.color(if (it.isError) ColorSlot.DANGER else ColorSlot.OK)),
+                        SpanStyle(color = look.color(it.slot)),
                     )
                 } ?: gestureHint(look),
                 onAdd = onAdd,
@@ -503,12 +586,13 @@ private fun MainScreenContent(
 }
 
 /**
- * The top row of the main screen: [title] on the left, then [today]'s date,
- * muted, and the gear ([settingsIcon], accent) on the right, one column in
- * from each edge (where the terminal app's frame sets its title into its top
- * border). Tapping the gear runs [onOpenSettings]; its tap area is at least
- * 48dp each way without moving the text. [modifier] is for the caller's
- * drawing order.
+ * The top row of the main screen: [title] on the left, then the sync
+ * indicator ([syncLine], when sync is on), [today]'s date, muted, and the
+ * gear ([settingsIcon], accent) on the right, one column in from each edge
+ * (where the terminal app's frame sets its title into its top border).
+ * Tapping the indicator runs [onSync] ("Sync now"), tapping the gear
+ * [onOpenSettings]; both tap areas are at least 48dp each way without moving
+ * the text. [modifier] is for the caller's drawing order.
  */
 @Composable
 private fun HeaderRow(
@@ -517,9 +601,12 @@ private fun HeaderRow(
     today: String,
     settingsIcon: String,
     onOpenSettings: () -> Unit,
+    syncLine: SyncLine?,
+    onSync: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val gearDescription = stringResource(R.string.open_settings)
+    val syncDescription = stringResource(R.string.sync_now_description)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -535,6 +622,18 @@ private fun HeaderRow(
             overflow = TextOverflow.Clip,
             modifier = Modifier.weight(1f),
         )
+        if (syncLine != null) {
+            LargeTapArea(
+                onClick = onSync,
+                modifier = Modifier.semantics { contentDescription = syncDescription },
+            ) {
+                BasicText(
+                    text = " ${syncLine.text}",
+                    style = look.text.copy(color = look.color(syncLine.slot)),
+                    maxLines = 1,
+                )
+            }
+        }
         BasicText(
             text = " $today ",
             style = look.text.copy(color = look.color(ColorSlot.MUTED)),

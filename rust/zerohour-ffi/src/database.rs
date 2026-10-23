@@ -24,7 +24,8 @@
 //! UTC. One text with the offset gives both, with no guessing on the hour a
 //! daylight-saving change makes ambiguous.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -205,9 +206,14 @@ impl StoredSettings {
 pub struct Database {
     /// Core's database handle, behind the lock.
     db: Mutex<Db>,
-    /// True for the in-memory demo database. Later steps check it so demo data
-    /// is never synced.
-    demo: bool,
+    /// The database file, or `None` for the in-memory demo database. A sync
+    /// opens its own connection to this file (see the `sync` module), and the
+    /// demo, having no file, can never be synced.
+    pub(crate) file: Option<PathBuf>,
+    /// True while a sync is running, so a second one is refused instead of
+    /// queued. An `AtomicBool` can be checked and set by several threads at
+    /// once without a lock.
+    pub(crate) syncing: AtomicBool,
 }
 
 /// Helpers used only inside this crate (not exported to Kotlin).
@@ -224,10 +230,12 @@ impl Database {
     }
 
     /// Wraps an open `Db` in the lock and the shared pointer Kotlin receives.
-    pub(crate) fn wrap(db: Db, demo: bool) -> Arc<Database> {
+    /// `file` is where it lives, or `None` for the in-memory demo.
+    pub(crate) fn wrap(db: Db, file: Option<PathBuf>) -> Arc<Database> {
         Arc::new(Database {
             db: Mutex::new(db),
-            demo,
+            file,
+            syncing: AtomicBool::new(false),
         })
     }
 }
@@ -245,7 +253,7 @@ impl Database {
         // `Path::new(&path)` views the text as a file path without copying it.
         // `?` converts a `DbError` with `From<DbError> for FfiError`.
         let db = Db::open(Path::new(&path))?;
-        Ok(Database::wrap(db, false))
+        Ok(Database::wrap(db, Some(PathBuf::from(path))))
     }
 
     /// Opens a fresh in-memory database filled with core's demo data, dated
@@ -259,12 +267,12 @@ impl Database {
         let now = parse_now(&now)?.local;
         let db = Db::open_in_memory()?;
         zerohour_core::demo::seed(&db, now, &chrono::Local)?;
-        Ok(Database::wrap(db, true))
+        Ok(Database::wrap(db, None))
     }
 
-    /// True for the in-memory demo database.
+    /// True for the in-memory demo database (the one with no file).
     pub fn is_demo(&self) -> bool {
-        self.demo
+        self.file.is_none()
     }
 
     /// The display settings saved in this database, with defaults filled in.

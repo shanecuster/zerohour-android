@@ -15,4 +15,5 @@ fun FfiException.explanation(): String = when (this) {
     is FfiException.Database -> detail
     is FfiException.InvalidInput -> detail
     is FfiException.Sync -> detail
+    is FfiException.Offline -> detail
 }
