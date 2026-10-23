@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The small icon of reminder notifications, in the status bar and on the
+  notification itself. Android draws it in one colour from its shape alone,
+  so the paths are plain white: the same hourglass and sand as the launcher
+  icon (ic_launcher_monochrome.xml), drawn larger (1.5 times) because a
+  status-bar icon has no safe-zone margin to leave.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="1.5"
+        android:scaleY="1.5">
+        <path
+            android:pathData="M176,136 H336 L256,256 L336,376 H176 L256,256 Z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="44"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M230,342 H282 L256,306 Z"
+            android:fillColor="#FFFFFFFF"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="10"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

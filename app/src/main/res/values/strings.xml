@@ -199,4 +199,10 @@
     <string name="sync_already_running">Already syncing…</string>
     <!-- The header indicator's name for screen readers. -->
     <string name="sync_now_description">Sync now</string>
+
+    <!-- Reminders: the notification channel's name and description, as the
+         phone's notification settings show them. The notifications' own
+         titles and texts come from core. -->
+    <string name="reminders_channel_name">Reminders</string>
+    <string name="reminders_channel_description">When tasks are due, and the daily list of overdue tasks.</string>
 </resources>

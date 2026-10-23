@@ -112,16 +112,21 @@ object ReminderScheduler {
             }
             apply(app, plan ?: emptyList())
             if (plan == null) cancelRefill(app) else setRefill(app)
+            // Take away notifications about tasks completed or deleted since
+            // they were shown (all of them on the demo, which never reminds).
+            val db = if (DatabaseHolder.usesDemo(app)) null else DatabaseHolder.get(app)
+            ReminderNotifications.removeClosed(app, db)
         }
     }
 
     /**
      * The reminders to schedule, or null when there must be none: the demo
-     * database, reminders switched off, or notifications not allowed.
+     * database, reminders switched off, or notifications that cannot be seen
+     * (blocked for the app, or the Reminders channel switched off).
      */
     private fun plannedReminders(context: Context): List<PlannedReminder>? {
         if (DatabaseHolder.usesDemo(context)) return null
-        if (!ReminderPermissions.notificationsAllowed(context)) return null
+        if (!ReminderNotifications.canShow(context)) return null
         val db = DatabaseHolder.get(context)
         if (!db.reminderSettings().enabled) return null
         return db.planReminders(nowText(), WINDOW_HOURS)
