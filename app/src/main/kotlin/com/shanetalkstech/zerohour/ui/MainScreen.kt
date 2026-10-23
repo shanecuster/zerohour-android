@@ -45,6 +45,7 @@ import com.shanetalkstech.zerohour.data.SyncRunner
 import com.shanetalkstech.zerohour.data.SyncState
 import com.shanetalkstech.zerohour.data.explanation
 import com.shanetalkstech.zerohour.data.nowText
+import com.shanetalkstech.zerohour.reminders.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -190,6 +191,9 @@ fun MainRoute() {
                 Status(e.explanation(), ColorSlot.DANGER)
             }
             reloads++
+            // A completed or deleted task must lose its reminder alarms (and
+            // a repeating one's next instance gets its own).
+            ReminderScheduler.replanSoon(context)
         }
     }
 
@@ -316,6 +320,9 @@ fun MainRoute() {
                             openForm = null
                             status = message?.let { Status(it) }
                             reloads++
+                            // A message means it was saved: an added or edited
+                            // task may need new or moved reminders.
+                            if (message != null) ReminderScheduler.replanSoon(context)
                         },
                     )
                 } else if (page == Page.SETTINGS) {
@@ -324,13 +331,20 @@ fun MainRoute() {
                         settingsIcon = s.screen.settingsIcon,
                         // Read everything again, so a new theme, icon set,
                         // time format or database shows at once.
-                        onChanged = { reloads++ },
+                        // Re-plan too: the 12/24-hour setting changes the
+                        // reminders' texts.
+                        onChanged = {
+                            reloads++
+                            ReminderScheduler.replanSoon(context)
+                        },
                         // The other database: read everything again, and drop
                         // the bottom row's message (such as "Synced: 0 in, 23
-                        // out."), which was about the database just left.
+                        // out."), which was about the database just left. Its
+                        // reminders replace the old ones (none on the demo).
                         onDataSwitched = {
                             status = null
                             reloads++
+                            ReminderScheduler.replanSoon(context)
                         },
                         onOpenSync = { page = Page.SYNC },
                         onClose = { page = Page.MAIN },

@@ -2,6 +2,7 @@ package com.shanetalkstech.zerohour.data
 
 import android.content.Context
 import com.shanetalkstech.zerohour.R
+import com.shanetalkstech.zerohour.reminders.ReminderScheduler
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -101,6 +102,9 @@ object SyncRunner {
             } finally {
                 running.set(false)
             }
+            // A sync can add, change, complete or delete tasks: the alarms
+            // must follow, whichever screen (if any) is open.
+            if (current.value is SyncState.Done) ReminderScheduler.replanSoon(app)
         }
         return true
     }

@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.shanetalkstech.zerohour.reminders.ReminderScheduler
 import com.shanetalkstech.zerohour.ui.MainRoute
 
 /**
@@ -45,5 +46,20 @@ class MainActivity : ComponentActivity() {
         setContent {
             MainRoute()
         }
+    }
+
+    /**
+     * Called by Android each time the screen comes to the front: at start,
+     * and on coming back from another app or from the system settings.
+     *
+     * Re-plans the reminder alarms in the background. That covers what no
+     * broadcast tells the app about: notifications or exact alarms allowed
+     * or blocked in the system settings, the Reminders channel switched off,
+     * and the first start after the app was force-stopped (which wipes its
+     * alarms).
+     */
+    override fun onResume() {
+        super.onResume()
+        ReminderScheduler.replanSoon(this)
     }
 }
