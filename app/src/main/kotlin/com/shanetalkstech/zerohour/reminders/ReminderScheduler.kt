@@ -13,6 +13,10 @@ import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -83,6 +87,17 @@ object ReminderScheduler {
     /** Lets only one re-plan run at a time, so two never undo each other. */
     private val mutex = Mutex()
 
+    /** The changeable counter behind [replans]. */
+    private val replanCount = MutableStateFlow(0)
+
+    /**
+     * Changes after every re-plan (its value is only a counter). The settings
+     * pages watch it to show the current "Next:" reminder and warnings; since
+     * the app re-plans each time it comes to the front, it also tells them
+     * when the user may have changed a permission in the system settings.
+     */
+    val replans: StateFlow<Int> = replanCount.asStateFlow()
+
     /**
      * Starts a re-plan in the background and returns at once. For the
      * screens, after a change; receivers use [replan] directly so Android
@@ -108,6 +123,7 @@ object ReminderScheduler {
                 plannedReminders(app)
             } catch (e: FfiException) {
                 Log.w(TAG, "re-plan skipped: the plan could not be read (${e.javaClass.simpleName})")
+                replanCount.update { it + 1 }
                 return@withLock
             }
             apply(app, plan ?: emptyList())
@@ -116,6 +132,7 @@ object ReminderScheduler {
             // they were shown (all of them on the demo, which never reminds).
             val db = if (DatabaseHolder.usesDemo(app)) null else DatabaseHolder.get(app)
             ReminderNotifications.removeClosed(app, db)
+            replanCount.update { it + 1 }
         }
     }
 

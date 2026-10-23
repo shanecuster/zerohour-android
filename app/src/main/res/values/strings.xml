@@ -205,6 +205,37 @@
          titles and texts come from core. -->
     <string name="reminders_channel_name">Reminders</string>
     <string name="reminders_channel_description">When tasks are due, and the daily list of overdue tasks.</string>
+    <!-- Settings: the row that opens the Reminders page, and the short
+         state after it ("Reminders ›  on, may be late"). -->
+    <string name="settings_reminders">Reminders ›</string>
+    <string name="reminders_state_late">on, may be late</string>
+    <string name="reminders_state_blocked">on, blocked</string>
+    <string name="reminders_demo_note">The demo database never reminds.</string>
+
+    <!-- The Reminders page. Labels are padded to line up, so keep them at
+         most 11 characters. -->
+    <string name="reminders_title">Reminders</string>
+    <string name="reminders_enabled">Reminders</string>
+    <string name="reminders_lead">Lead</string>
+    <string name="reminders_day_time">Day time</string>
+    <string name="reminders_digest">Digest</string>
+    <string name="reminders_lead_none">none</string>
+    <!-- %1$d is the lead time in minutes. -->
+    <string name="reminders_lead_minutes">%1$d min</string>
+    <!-- %1$s is when, e.g. "Mon 2:00 PM"; %2$s the task's title. -->
+    <string name="reminders_next">Next: %1$s  %2$s</string>
+    <string name="reminders_next_none">Next: nothing in the next 48 hours.</string>
+    <string name="reminders_blocked">⚠ Notifications are blocked for zerohour, so no reminders can be shown.</string>
+    <string name="reminders_open_notification_settings">[ open notification settings ]</string>
+    <string name="reminders_inexact">⚠ Exact alarms are off: reminders may come up to an hour late.</string>
+    <string name="reminders_allow_exact">[ allow exact alarms ]</string>
+    <string name="reminders_day_time_hint">Day time is when tasks due on a day without a time are reminded, and when the digest of overdue tasks comes. Lead adds an earlier reminder before a due time.</string>
+    <!-- The box offering exact alarms after reminders are switched on. -->
+    <string name="exact_title">" Exact alarms "</string>
+    <string name="exact_question">For reminders right on the minute, allow zerohour to set alarms (Alarms &amp; reminders). Without it, Android may deliver reminders up to about an hour late.</string>
+    <string name="exact_open">[ open settings ]</string>
+    <string name="exact_not_now">[ not now ]</string>
+
     <!-- The button on a reminder about one task; it completes the task. -->
     <string name="reminder_done">Done</string>
     <!-- Replaces a reminder's text when Done could not complete the task.

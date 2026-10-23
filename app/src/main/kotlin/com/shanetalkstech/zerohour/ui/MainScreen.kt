@@ -116,7 +116,7 @@ private data class OpenForm(val form: ItemForm, val adding: Boolean)
 /** A line swiped left, waiting for "delete" or "keep": its [id] and [title]. */
 private data class PendingDelete(val id: String, val title: String)
 
-/** Which full page is showing: the main screen with its tabs, settings or sync. */
+/** Which full page is showing: the main screen with its tabs, settings, sync or reminders. */
 private enum class Page {
     /** The main screen (header, the chosen tab, the tab bar). */
     MAIN,
@@ -126,6 +126,9 @@ private enum class Page {
 
     /** The sync page, opened from "Sync ›" on the settings page. */
     SYNC,
+
+    /** The reminders page, opened from "Reminders ›" on the settings page. */
+    REMINDERS,
 }
 
 /**
@@ -347,7 +350,16 @@ fun MainRoute() {
                             ReminderScheduler.replanSoon(context)
                         },
                         onOpenSync = { page = Page.SYNC },
+                        onOpenReminders = { page = Page.REMINDERS },
                         onClose = { page = Page.MAIN },
+                    )
+                } else if (page == Page.REMINDERS) {
+                    // Closing goes back to the settings page it came from.
+                    // The page saves and re-plans each change itself.
+                    ReminderPage(
+                        look = look,
+                        columns = columns,
+                        onClose = { page = Page.SETTINGS },
                     )
                 } else if (page == Page.SYNC) {
                     // Closing goes back to the settings page it came from,
