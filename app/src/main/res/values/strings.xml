@@ -205,4 +205,9 @@
          titles and texts come from core. -->
     <string name="reminders_channel_name">Reminders</string>
     <string name="reminders_channel_description">When tasks are due, and the daily list of overdue tasks.</string>
+    <!-- The button on a reminder about one task; it completes the task. -->
+    <string name="reminder_done">Done</string>
+    <!-- Replaces a reminder's text when Done could not complete the task.
+         %1$s is the reason, in core's words. -->
+    <string name="reminder_done_failed">Couldn\'t mark it done: %1$s</string>
 </resources>

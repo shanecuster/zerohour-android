@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import com.shanetalkstech.zerohour.R
 import com.shanetalkstech.zerohour.data.DatabaseHolder
+import com.shanetalkstech.zerohour.data.DataChanges
 import com.shanetalkstech.zerohour.data.SyncRunner
 import com.shanetalkstech.zerohour.data.SyncState
 import com.shanetalkstech.zerohour.data.explanation
@@ -232,6 +233,18 @@ fun MainRoute() {
             syncState is SyncState.Failed
         if (finished) {
             syncResults.firstOrNull()?.let { status = Status(it.text, it.slot) }
+            reloads++
+        }
+    }
+
+    // Changes made outside this screen (a reminder's "Done" button while the
+    // app is open) read everything again too. The first value is skipped:
+    // the screen loads on its own when it opens.
+    val outsideChanges by DataChanges.version.collectAsState()
+    var seenChanges by remember { mutableIntStateOf(outsideChanges) }
+    LaunchedEffect(outsideChanges) {
+        if (outsideChanges != seenChanges) {
+            seenChanges = outsideChanges
             reloads++
         }
     }

@@ -5,8 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -90,6 +92,37 @@ object ReminderNotifications {
         ) {
             return
         }
+        val tag = tagFor(key, itemId)
+        val builder = builder(context, title, body, accent)
+        // "Done" only for a reminder about one task; the digest has none.
+        if (itemId != null) {
+            builder.addAction(
+                0, // no icon: Android shows actions as words
+                context.getString(R.string.reminder_done),
+                doneIntent(context, key, tag, itemId, title),
+            )
+        }
+        context.getSystemService(NotificationManager::class.java).notify(tag, NOTIFICATION_ID, builder.build())
+    }
+
+    /**
+     * Replaces the notification posted with [tag] by one saying a problem
+     * ([text]) under the task's [title], without a "Done" button. Used when
+     * "Done" could not complete the task.
+     */
+    fun showProblem(context: Context, tag: String, title: String, text: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        context.getSystemService(NotificationManager::class.java)
+            .notify(tag, NOTIFICATION_ID, builder(context, title, text, null).build())
+    }
+
+    /** The parts every reminder notification shares (see [show]). */
+    private fun builder(context: Context, title: String, body: String, accent: Int?): NotificationCompat.Builder {
         createChannel(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -106,8 +139,34 @@ object ReminderNotifications {
             // A tap opens the app and takes the notification away.
             .setAutoCancel(true)
         if (accent != null) builder.setColor(accent)
-        context.getSystemService(NotificationManager::class.java)
-            .notify(tagFor(key, itemId), NOTIFICATION_ID, builder.build())
+        return builder
+    }
+
+    /**
+     * What the "Done" button does: tell [ReminderDoneReceiver] to complete
+     * the task [itemId] and take away the notification [tag]. The key is the
+     * intent's data URI, so every notification's button is its own (the
+     * extras alone would not tell Android's pending intents apart).
+     */
+    private fun doneIntent(
+        context: Context,
+        key: String,
+        tag: String,
+        itemId: String,
+        title: String,
+    ): PendingIntent {
+        val intent = Intent(context, ReminderDoneReceiver::class.java)
+            .setAction(ReminderDoneReceiver.ACTION_DONE)
+            .setData(Uri.fromParts("zerohour-done", key, null))
+            .putExtra(ReminderScheduler.EXTRA_ITEM_ID, itemId)
+            .putExtra(ReminderScheduler.EXTRA_TITLE, title)
+            .putExtra(ReminderDoneReceiver.EXTRA_TAG, tag)
+        return PendingIntent.getBroadcast(
+            context,
+            requestCodeFor(key),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     /** The tag a reminder's notification is posted with (see the class notes). */
