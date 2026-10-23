@@ -184,7 +184,6 @@
     <string name="sync_state_never">never synced</string>
     <string name="sync_status_line">Status: %1$s · %2$s documents synced</string>
     <string name="sync_result_done">Synced: %1$s in, %2$s out.</string>
-    <string name="sync_result_offline">Offline: %1$s</string>
     <string name="sync_result_error">Sync error: %1$s</string>
     <plurals name="sync_needs_newer">
         <item quantity="one">%1$d synced item needs a newer zerohour; update this app.</item>
@@ -197,4 +196,7 @@
         <item quantity="one">This phone has %1$d item. The first sync adds it to the server\'s; anything typed on both devices will appear twice.</item>
         <item quantity="other">This phone has %1$d items. The first sync adds them to the server\'s; anything typed on both devices will appear twice.</item>
     </plurals>
+    <string name="sync_already_running">Already syncing…</string>
+    <!-- The header indicator's name for screen readers. -->
+    <string name="sync_now_description">Sync now</string>
 </resources>

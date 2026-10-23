@@ -92,7 +92,8 @@ fun syncResultLines(state: SyncState): List<SyncLine> {
     val context = LocalContext.current
     return when (state) {
         SyncState.Idle, SyncState.Running -> emptyList()
-        is SyncState.Offline -> listOf(SyncLine(stringResource(R.string.sync_result_offline, state.detail), ColorSlot.WARN))
+        // Core's words already start with "offline:".
+        is SyncState.Offline -> listOf(SyncLine(state.detail, ColorSlot.WARN))
         is SyncState.Failed -> listOf(SyncLine(stringResource(R.string.sync_result_error, state.detail), ColorSlot.DANGER))
         is SyncState.Done -> buildList {
             val outcome: SyncOutcome = state.outcome
