@@ -32,6 +32,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -118,6 +119,11 @@ private data class SyncMessage(val text: String, val slot: ColorSlot)
 @Composable
 fun SyncPage(look: TuiLook, onClose: () -> Unit) {
     val context = LocalContext.current
+    // Strings that are looked up in a callback (after a save, swipe or sync)
+    // come from `LocalResources` rather than `context.getString`: Compose
+    // re-reads it when the phone's configuration (such as its language)
+    // changes, so the texts never come from out-of-date resources.
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
@@ -254,7 +260,7 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
             val result = DatabaseHolder.get(context).testConnection(details, password, nowText())
             clockWarning = result.clockSkewSecs?.let { skewText(context, it) }
             SyncMessage(
-                context.getString(R.string.sync_connected, result.docCount.toString()),
+                resources.getString(R.string.sync_connected, result.docCount.toString()),
                 ColorSlot.OK,
             )
         }

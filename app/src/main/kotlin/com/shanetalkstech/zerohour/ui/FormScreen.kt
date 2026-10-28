@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -101,6 +102,11 @@ fun FormScreen(
     preselectedKind: ItemKind = ItemKind.TASK,
 ) {
     val context = LocalContext.current
+    // Strings that are looked up in a callback (after a save, swipe or sync)
+    // come from `LocalResources` rather than `context.getString`: Compose
+    // re-reads it when the phone's configuration (such as its language)
+    // changes, so the texts never come from out-of-date resources.
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
@@ -143,8 +149,8 @@ fun FormScreen(
             saving = false
             when (outcome) {
                 is SaveOutcome.Invalid -> error = outcome.message
-                is SaveOutcome.Added -> onClose(context.getString(R.string.status_added, outcome.title))
-                is SaveOutcome.Saved -> onClose(context.getString(R.string.status_saved, outcome.title))
+                is SaveOutcome.Added -> onClose(resources.getString(R.string.status_added, outcome.title))
+                is SaveOutcome.Saved -> onClose(resources.getString(R.string.status_saved, outcome.title))
             }
         }
     }
