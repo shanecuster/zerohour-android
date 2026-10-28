@@ -83,6 +83,37 @@ MIN_API="${ZEROHOUR_MIN_API:-26}"
 # "Build tools" table, and in F-Droid's recipe together.
 CARGO_NDK_VERSION="4.1.2"
 
+# --- Keep this computer's folder names out of the library --------------------
+# Rust writes the source file's path into the library for every possible
+# panic message ("panicked at /home/<you>/.cargo/registry/src/.../lib.rs:12").
+# Left alone, the shipped .so would carry this computer's user name and folder
+# layout, and two machines could never build the same bytes (F-Droid checks
+# that). `--remap-path-prefix=FROM=TO` makes the compiler write TO wherever a
+# path starts with FROM:
+#   $CARGO_HOME (normally ~/.cargo)  ->  /cargo         downloaded crates and
+#                                                       the pinned core checkout
+#   the project root                 ->  /zerohour-android
+# scripts/check-release-apk.sh fails if a /home/ path ever comes back.
+#
+# The flags go in CARGO_ENCODED_RUSTFLAGS, where flags are separated by the
+# invisible "unit separator" character (\x1f, written $'\x1f' in bash) instead
+# of spaces, so a folder name containing a space cannot split a flag in two.
+# Cargo uses this variable in place of RUSTFLAGS, so flags someone already
+# set in either one are kept: RUSTFLAGS words are converted (`tr -s ' '`
+# turns each run of spaces into one separator) and the remaps are added after.
+# Changing these flags makes cargo rebuild everything once.
+CARGO_HOME_DIR="${CARGO_HOME:-$HOME/.cargo}"
+SEP=$'\x1f'
+REMAP="--remap-path-prefix=$CARGO_HOME_DIR=/cargo${SEP}--remap-path-prefix=$ROOT=/zerohour-android"
+if [ -n "${CARGO_ENCODED_RUSTFLAGS:-}" ]; then
+    CARGO_ENCODED_RUSTFLAGS="$CARGO_ENCODED_RUSTFLAGS$SEP$REMAP"
+elif [ -n "${RUSTFLAGS:-}" ]; then
+    CARGO_ENCODED_RUSTFLAGS="$(printf '%s' "$RUSTFLAGS" | tr -s ' ' "$SEP")$SEP$REMAP"
+else
+    CARGO_ENCODED_RUSTFLAGS="$REMAP"
+fi
+export CARGO_ENCODED_RUSTFLAGS
+
 # --- Small helper: print an error and quit -----------------------------------
 # `>&2` sends the message to the "error" output stream; `exit 1` stops the
 # script with a failure code, which makes Gradle report the build as failed.
