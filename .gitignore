@@ -17,6 +17,20 @@ gradle/gradle-daemon-jvm.properties
 keystore.properties
 *.jks
 *.keystore
+# Other key formats: PKCS#12 stores, raw PKCS#8 keys, and Google Play's
+# encrypted key export.
+*.p12
+*.pk8
+*.pepk
+
+# Built packages. Gradle writes them under build/ (already ignored), but
+# Android Studio's "Generate Signed App Bundle or APK" wizard writes them to
+# app/release/, and a copied APK can land anywhere. .idsig is apksigner's
+# v4 signature file, written next to a signed APK.
+app/release/
+*.apk
+*.aab
+*.idsig
 
 # Rust build output.
 rust/target/
