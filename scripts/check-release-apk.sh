@@ -97,7 +97,10 @@ docs.rs"
 # The words: core's setting-key words, the values "true" and "false", and
 # "the", the first word of the message stored next to them. Underscores
 # (lead_minutes) cannot appear in a candidate, so the parts are listed singly.
-SETTING_WORDS="sync|enabled|database|username|password|url|false|true|reminders|lead|minutes|day|time|digest|overdue|the"
+# Kept short on purpose: only words that really sit next to an "http://" text
+# in the library. "day", for example, is left out because .day is a real
+# top-level domain, so "sync.day" could be a real server.
+SETTING_WORDS="sync|enabled|database|username|password|false|true|reminders|lead|minutes|digest|overdue|the"
 
 # --- Small helpers: report a result ------------------------------------------
 # FAILURES counts the failed checks; the exit code at the end depends on it.
