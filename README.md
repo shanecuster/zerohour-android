@@ -34,15 +34,16 @@ app and pinned to one commit.
 ## Reminders
 
 Off until switched on in **Settings → Reminders ›**. Core plans them (the same
-rules the terminal app will use) and the phone turns them into Android alarms
-and notifications; nothing about them leaves the phone.
+rules the terminal app's `zerohour remind` uses) and the phone turns them into
+Android alarms and notifications; nothing about them leaves the phone.
 
 - **What reminds:** a task with a due time, at that time (plus an earlier one
   if **Lead** is set); a repeating task also at each later scheduled time
   while it stays open, so a missed Monday 2 PM still reminds on Tuesday at
   2 PM; a task due on a day without a time, at **Day time** (09:00) that day;
-  and, if **Digest** is on, a daily list of overdue tasks at Day time. Never
-  events, completed or deleted tasks, or anything on the demo database.
+  and, if **Digest** is on, a daily list of overdue tasks at Day time (a
+  task is overdue once its due day is over, not when its due time passes).
+  Never events, completed or deleted tasks, or anything on the demo database.
 - **Done** on a notification completes the task like a swipe (a repeating
   task gets its next instance). The digest has no Done.
 - **Exact or late:** with *Alarms & reminders* allowed for the app (off by
