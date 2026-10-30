@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -89,7 +89,11 @@ fun syncStatusLine(status: SyncStatus, state: SyncState): String {
  */
 @Composable
 fun syncResultLines(state: SyncState): List<SyncLine> {
-    val context = LocalContext.current
+    // The app's texts, for the one lookup below that is not a
+    // `stringResource` call. `LocalResources` (rather than the context's
+    // `getString`) is re-read by Compose when the phone's configuration, such
+    // as its language, changes.
+    val resources = LocalResources.current
     return when (state) {
         SyncState.Idle, SyncState.Running -> emptyList()
         // Core's words already start with "offline:".
@@ -105,7 +109,7 @@ fun syncResultLines(state: SyncState): List<SyncLine> {
                 // Minutes, rounded up, as in the terminal app.
                 val minutes = ((abs(seconds) + 59) / 60).toString()
                 val id = if (seconds > 0) R.string.sync_clock_ahead else R.string.sync_clock_behind
-                add(SyncLine(context.getString(id, minutes), ColorSlot.WARN))
+                add(SyncLine(resources.getString(id, minutes), ColorSlot.WARN))
             }
             add(
                 SyncLine(

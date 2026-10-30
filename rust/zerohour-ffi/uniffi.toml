@@ -1,0 +1,24 @@
+# uniffi.toml: settings for the Kotlin file UniFFI generates from this crate.
+#
+# UniFFI's bindings generator (rust/uniffi-bindgen, run by
+# scripts/build-rust.sh) finds this file next to the crate's Cargo.toml and
+# reads it while writing app/src/main/kotlin/uniffi/zerohour_ffi/zerohour_ffi.kt.
+# It is TOML, the same key = value format as Cargo.toml.
+
+[bindings.kotlin]
+# Write Kotlin for Android rather than for a desktop JVM.
+#
+# What it changes: the "cleaner", the helper that frees a Rust object (such as
+# `Database` or `ItemForm`) once Kotlin no longer uses it. Without this
+# setting the generated code tries Java's `java.lang.ref.Cleaner`, which
+# Android only has from API 33, guarded by a runtime class lookup that
+# Android's lint cannot see, so `lintRelease` reports three NewApi errors
+# (our minSdk is 26). With it, the generated code checks the Android version
+# itself: Android's own `SystemCleaner` on API 34 and later, JNA's cleaner
+# below that. UniFFI skips API 33 on purpose, because some API 33 systems
+# cannot use the system cleaner.
+#
+# The generated file then imports `androidx.annotation.RequiresApi` for that
+# check. AndroidX's annotation library already reaches the app through
+# core-ktx and Compose, so no dependency is added.
+android = true

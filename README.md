@@ -147,12 +147,60 @@ its name) also makes `armeabi-v7a`. Override with
 2. **Merge, then tag** the release `v<versionName>` (for example `v0.1.1`) and
    push the tag, because F-Droid builds from tags. Never move or reuse a tag; a
    fix is a new version and a new tag.
-3. **Check the release build.** `./gradlew assembleRelease` must succeed and
-   `app/build/outputs/apk/release/` must hold an APK with `arm64-v8a`,
-   `armeabi-v7a` and `x86_64` libraries (`unzip -l <apk> | grep '\.so'`). Google
-   Play requires 16 KB page alignment for updates from 1 February 2027:
-   `zipalign -c -P 16 -v 4 <apk>` (from the SDK's `build-tools`) must say
-   "Verification successful".
+3. **Check the release build.** `./gradlew lintRelease` must report 0 errors
+   (lint's `NewApi` check is also fatal in `assembleRelease` itself, so a call
+   newer than minSdk stops the build). Then `./gradlew assembleRelease` and
+   `scripts/check-release-apk.sh` (see "Checking a release APK" below), which
+   covers the `arm64-v8a`, `armeabi-v7a` and `x86_64` libraries, and the 16 KB
+   page alignment Google Play requires for updates from 1 February 2027.
+
+### Checking a release APK
+
+`scripts/check-release-apk.sh [apk] [--allow-unsigned]` only reads the APK
+(by default `app/build/outputs/apk/release/app-release.apk`) and prints PASS,
+FAIL or INFO per check: the package (no `.debug`) and not debuggable; exactly
+the four permissions listed under Google Play below; the Rust library for all
+three CPU types; no `/home/` paths, test values (`sandbox`, `.invalid`
+addresses, `ts.net`), PEM private keys or password settings; no web address
+outside a short, commented allowlist in the script; 16 KB alignment; and
+`apksigner verify`, refusing Android Studio's debug key. It exits with 1 if
+anything failed.
+
+Your **real hostnames and user names** are checked too, without ever being
+written into this repo: keep them in a plain text file outside every repo (one
+per line; blank lines and `#` comments are ignored) and point
+`ZEROHOUR_CHECK_STRINGS` at it. A match is reported by line number, never by
+value. If the variable is unset, that check fails rather than being skipped.
+
+```bash
+# fish
+set -x ZEROHOUR_CHECK_STRINGS /path/outside/the/repo/zerohour-check-strings.txt
+scripts/check-release-apk.sh
+```
+
+The Rust library has no machine paths because `scripts/build-rust.sh` passes
+`--remap-path-prefix` (cargo's folder becomes `/cargo`, this project
+`/zerohour-android`). Core's demo seeder is compiled in but cannot be opened
+in a release build; the script notes it as INFO.
+
+### Sideloading a signed release on your own phone
+
+1. Make the `zerohour-upload` key and `keystore.properties` once (steps 1 and
+   2 under "Google Play" below; the same key signs both).
+2. In the terminal you build from, set both passwords (fish:
+   `read -s -x ZEROHOUR_STORE_PASSWORD` and `read -s -x ZEROHOUR_KEY_PASSWORD`;
+   with keytool's default PKCS12 keystore they are the same password), then
+   `./gradlew assembleRelease`. The signed APK is
+   `app/build/outputs/apk/release/app-release.apk` (an `-unsigned` name means
+   the signing details were not found).
+3. Run `scripts/check-release-apk.sh`; every line must be PASS or INFO.
+4. Install on one specific phone: `adb devices -l` lists the serial numbers,
+   then `adb -s <serial> install app/build/outputs/apk/release/app-release.apk`.
+   It installs next to the `.debug` app (a separate app with its own data,
+   left untouched). Later versions install over it with `install -r`, as long
+   as they are signed with the same key and `versionCode` does not go down.
+5. First launch: the real, empty database (no "demo" in the header, no Data
+   row in Settings), reminders off and sync off until you switch them on.
 
 ### Google Play: the signed bundle
 
@@ -167,6 +215,11 @@ re-signs what users download with its own app signing key.
    keytool -genkeypair -v -keystore ~/keys/zerohour-upload.jks \
      -alias zerohour-upload -keyalg RSA -keysize 4096 -validity 10000
    ```
+
+   keytool's default keystore type is PKCS12, which has a single password: it
+   ignores a separate key password, so `storePassword` and `keyPassword` (or
+   the two environment variables below) are the same. Keep the password in a
+   password manager.
 
 2. **Point the build at it.** Copy `keystore.properties.example` to
    `keystore.properties` (git-ignored) and fill in `storeFile` (a full path) and

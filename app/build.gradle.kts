@@ -178,6 +178,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    lint {
+        // A release build (assembleRelease, bundleRelease) runs only lint's
+        // *fatal* checks ("lintVital"), and NewApi, a call to something newer
+        // than minSdk, is normally just an error, so the build would go ahead.
+        // Making it fatal stops a release that would crash on older phones.
+        // `+=` adds the check's id to the set of fatal ones.
+        fatal += "NewApi"
+    }
+
     buildFeatures {
         compose = true
         // Generates the small `BuildConfig` class. The app reads its `DEBUG`

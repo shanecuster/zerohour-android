@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -153,6 +154,11 @@ private enum class Page {
 @Composable
 fun MainRoute() {
     val context = LocalContext.current
+    // Strings that are looked up in a callback (after a save, swipe or sync)
+    // come from `LocalResources` rather than `context.getString`: Compose
+    // re-reads it when the phone's configuration (such as its language)
+    // changes, so the texts never come from out-of-date resources.
+    val resources = LocalResources.current
     // Before the database is read there is no saved theme yet; use core's
     // default for the loading screen.
     val fallbackTheme = remember { defaultTheme() }
@@ -204,10 +210,10 @@ fun MainRoute() {
     // app does (or that events can't be completed).
     fun complete(id: String) = runChange { db ->
         when (val outcome = db.completeTask(id, nowText())) {
-            CompleteOutcome.NotATask -> context.getString(R.string.status_event_not_done)
+            CompleteOutcome.NotATask -> resources.getString(R.string.status_event_not_done)
             is CompleteOutcome.Done -> outcome.nextDue?.let {
-                context.getString(R.string.status_done_next, outcome.title, it)
-            } ?: context.getString(R.string.status_done, outcome.title)
+                resources.getString(R.string.status_done_next, outcome.title, it)
+            } ?: resources.getString(R.string.status_done, outcome.title)
         }
     }
 
@@ -425,7 +431,7 @@ fun MainRoute() {
                                     pendingDelete = null
                                     runChange { db ->
                                         db.deleteItem(pending.id, nowText())
-                                        context.getString(R.string.status_deleted, pending.title)
+                                        resources.getString(R.string.status_deleted, pending.title)
                                     }
                                 },
                                 onKeep = { pendingDelete = null },
