@@ -62,8 +62,9 @@
 
           icon / roundIcon: the adaptive hourglass icon in res/mipmap-anydpi
           (artwork and licence: third_party/icon/README.md). Debug builds
-          replace its foreground with a badged one (src/debug/res), so the
-          .debug app is easy to tell apart on the home screen.
+          replace its foreground and monochrome layers with ringed ones
+          (src/debug/res), so the .debug app is easy to tell apart on the
+          home screen.
         -->
 
         <!--

@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Debug builds only: replaces src/main's monochrome layer with the same
-  shapes plus the badge, so the .debug app stays distinguishable with themed
+  shapes inside the ring, so the .debug app stays distinguishable with themed
   icons too (where every colour is replaced by the wallpaper's).
   Gradle uses this file instead of the one in src/main/res for debug
   builds, because the debug source set overrides resources of the same name.
+  The sizes match the debug ic_launcher_foreground.xml: the hourglass at 84%
+  and the ring from 145 to 155 units, inside the 66dp safe zone.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -14,8 +16,8 @@
     <group
         android:pivotX="256"
         android:pivotY="256"
-        android:scaleX="0.9"
-        android:scaleY="0.9">
+        android:scaleX="0.84"
+        android:scaleY="0.84">
         <path
             android:pathData="M176,136 H336 L256,256 L336,376 H176 L256,256 Z"
             android:strokeColor="#FFFFFFFF"
@@ -29,13 +31,9 @@
             android:strokeWidth="10"
             android:strokeLineJoin="round" />
     </group>
-    <!--
-      Debug builds only: a round badge to the right of the hourglass's waist,
-      inside the 66dp safe zone (its centre is 96 units from the middle and
-      its radius 28, against a safe-zone radius of about 156) and clear of
-      the outline. It is outside the 90% group, so it is not scaled.
-    -->
+    <!-- Debug builds only: the ring, as in the debug foreground (not scaled). -->
     <path
-        android:pathData="M324,256 A28,28 0 1,0 380,256 A28,28 0 1,0 324,256 Z"
-        android:fillColor="#FFFFFFFF" />
+        android:pathData="M106,256 A150,150 0 1,0 406,256 A150,150 0 1,0 106,256 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="10" />
 </vector>
