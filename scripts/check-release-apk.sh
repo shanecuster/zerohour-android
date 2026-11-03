@@ -73,11 +73,6 @@ RELEASE_ABIS="arm64-v8a armeabi-v7a x86_64"
 #   www.w3.org            Android, AndroidX and the NDK compiler's own texts
 #   youtrack.jetbrains.com  Kotlin's standard library error messages
 #   docs.rs               a link in an error message of rustls (TLS)
-#   sync.enabledsync.databasesync.usernamefalsethe
-#                         not an address: core's setting names (sync.enabled,
-#                         sync.database, sync.username, ...) stored back to
-#                         back right after an "http://" text, which the
-#                         pattern reads as one long host name
 ALLOWED_HOSTS="couch.example.org
 android.googlesource.com
 r.android.com
@@ -85,8 +80,27 @@ goo.gle
 schemas.android.com
 www.w3.org
 youtrack.jetbrains.com
-docs.rs
-sync.enabledsync.databasesync.usernamefalsethe"
+docs.rs"
+
+# Not addresses at all: core's setting names. The compiled Rust library keeps
+# its short texts back to back with nothing between them, so right after an
+# "http://" text it holds, for example,
+#     http://sync.enabledsync.databasesync.usernamefalsethe server URL ...
+# (the setting names sync.enabled, sync.database, sync.username, the value
+# "false", then the start of core's "the server URL must ..." message). The
+# address pattern reads that as one long host name, and what sits next to the
+# names changes whenever core changes, so an exact entry in ALLOWED_HOSTS
+# breaks on the next re-pin. Instead, check 5 skips a candidate when EVERY
+# dot-separated part of it is made only of the words below, glued together
+# (`enabledsync` = `enabled` + `sync`). A real host name always has a part
+# that is not one of these words (its domain, such as "example" or "net").
+# The words: core's setting-key words, the values "true" and "false", and
+# "the", the first word of the message stored next to them. Underscores
+# (lead_minutes) cannot appear in a candidate, so the parts are listed singly.
+# Kept short on purpose: only words that really sit next to an "http://" text
+# in the library. "day", for example, is left out because .day is a real
+# top-level domain, so "sync.day" could be a real server.
+SETTING_WORDS="sync|enabled|database|username|password|false|true|reminders|lead|minutes|digest|overdue|the"
 
 # --- Small helpers: report a result ------------------------------------------
 # FAILURES counts the failed checks; the exit code at the end depends on it.
@@ -227,11 +241,17 @@ done
 
 # --- 5. Server addresses ---------------------------------------------------------
 # Every http(s)://host.name in the project's own files must be on the
-# ALLOWED_HOSTS list above. `sed` strips the http(s):// part.
+# ALLOWED_HOSTS list above, or be made only of SETTING_WORDS. `sed` strips
+# the http(s):// part.
 FOUND_HOSTS="$(grep -aohE 'https?://[A-Za-z0-9.-]+\.[A-Za-z0-9.-]+' "${OWN_FILES[@]}" \
     | sed -E 's#^https?://##' | sort -u || true)"
+# One or more setting words glued together, then one or more ".<the same>"
+# parts, and nothing else. `-v` keeps the lines that do NOT match; `-i`
+# ignores upper/lower case.
+SETTING_WORDS_ONLY="^($SETTING_WORDS)+(\\.($SETTING_WORDS)+)+\$"
 # `comm -23 A B` prints the lines only in A; both inputs must be sorted.
-UNEXPECTED_HOSTS="$(comm -23 <(printf '%s\n' "$FOUND_HOSTS" | sed '/^$/d') <(sort -u <<< "$ALLOWED_HOSTS"))"
+UNEXPECTED_HOSTS="$(comm -23 <(printf '%s\n' "$FOUND_HOSTS" | sed '/^$/d') <(sort -u <<< "$ALLOWED_HOSTS") \
+    | grep -viE -- "$SETTING_WORDS_ONLY" || true)"
 if [ -z "$UNEXPECTED_HOSTS" ]; then
     pass "no server addresses other than the known harmless ones"
 else
