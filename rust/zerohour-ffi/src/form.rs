@@ -83,6 +83,12 @@ pub enum FormField {
     Repeat,
     /// Seven day checkboxes, for the weekday repeats.
     Days,
+    /// Choice (Nth-weekday repeats): 1st to 4th, or last.
+    Ordinal,
+    /// Choice (Nth-weekday repeats): the day of the week.
+    Weekday,
+    /// Choice (Nth-weekday repeats): a month, or every month.
+    Month,
     /// Free text, digits only: the N of "every N", for the custom repeat.
     EveryN,
     /// Choice: days, weeks or months, for the custom repeat.
@@ -104,6 +110,9 @@ impl From<Field> for FormField {
             Field::Time => FormField::Time,
             Field::Repeat => FormField::Repeat,
             Field::Days => FormField::Days,
+            Field::Ordinal => FormField::Ordinal,
+            Field::Weekday => FormField::Weekday,
+            Field::Month => FormField::Month,
             Field::EveryN => FormField::EveryN,
             Field::EveryUnit => FormField::EveryUnit,
             Field::KeepAfterPass => FormField::KeepAfterPass,
@@ -475,6 +484,11 @@ impl ItemForm {
                                 on: input.days.contains(day),
                             })
                             .collect(),
+                        ..blank
+                    },
+                    // The Nth weekday's three choices: core names the value.
+                    Field::Ordinal | Field::Weekday | Field::Month => FieldRow {
+                        value: input.field_value(field),
                         ..blank
                     },
                     Field::EveryN => FieldRow {

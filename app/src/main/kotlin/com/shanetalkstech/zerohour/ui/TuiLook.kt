@@ -130,6 +130,7 @@ fun ThemePalette.color(slot: ColorSlot): Color = when (slot) {
     ColorSlot.MUTED -> muted
     ColorSlot.BORDER -> border
     ColorSlot.ACCENT -> accent
+    ColorSlot.BANNER_END -> bannerEnd
     ColorSlot.SELECTION -> selection
     ColorSlot.TASK -> task
     ColorSlot.EVENT -> event

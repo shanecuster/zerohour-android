@@ -34,6 +34,8 @@ pub enum ColorSlot {
     Border,
     /// Highlights.
     Accent,
+    /// The right-hand end of the title banner's gradient (each theme's orange).
+    BannerEnd,
     /// The selected row's background.
     Selection,
     /// The Tasks colour.
@@ -59,6 +61,7 @@ impl From<Slot> for ColorSlot {
             Slot::Muted => ColorSlot::Muted,
             Slot::Border => ColorSlot::Border,
             Slot::Accent => ColorSlot::Accent,
+            Slot::BannerEnd => ColorSlot::BannerEnd,
             Slot::Selection => ColorSlot::Selection,
             Slot::Task => ColorSlot::Task,
             Slot::Event => ColorSlot::Event,

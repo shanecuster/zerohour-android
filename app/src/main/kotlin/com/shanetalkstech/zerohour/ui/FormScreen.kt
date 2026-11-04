@@ -461,7 +461,8 @@ private fun FieldLine(
                 FormField.TITLE, FormField.DATE, FormField.TIME, FormField.EVERY_N, FormField.NOTES ->
                     TextInput(look, row.field, row.value, isFocused, onFocus, onText, Modifier.weight(1f))
 
-                FormField.PRIORITY, FormField.REPEAT, FormField.EVERY_UNIT -> {
+                FormField.PRIORITY, FormField.REPEAT, FormField.EVERY_UNIT,
+                FormField.ORDINAL, FormField.WEEKDAY, FormField.MONTH -> {
                     // "‹ Medium ›": the arrows step back and forward through
                     // the choices, starting in the value column like the
                     // terminal app's. The arrows' blanks are part of their
