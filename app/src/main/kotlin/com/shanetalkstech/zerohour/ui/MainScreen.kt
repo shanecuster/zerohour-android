@@ -117,7 +117,7 @@ private data class OpenForm(val form: ItemForm, val adding: Boolean)
 /** A line swiped left, waiting for "delete" or "keep": its [id] and [title]. */
 private data class PendingDelete(val id: String, val title: String)
 
-/** Which full page is showing: the main screen with its tabs, settings, sync or reminders. */
+/** Which full page is showing: the main screen with its tabs, settings, sync, reminders, About or licenses. */
 private enum class Page {
     /** The main screen (header, the chosen tab, the tab bar). */
     MAIN,
@@ -130,6 +130,12 @@ private enum class Page {
 
     /** The reminders page, opened from "Reminders ›" on the settings page. */
     REMINDERS,
+
+    /** The About page, opened from "About ›" on the settings page. */
+    ABOUT,
+
+    /** The open source licenses page, opened from the About page. */
+    LICENSES,
 }
 
 /**
@@ -357,8 +363,19 @@ fun MainRoute() {
                         },
                         onOpenSync = { page = Page.SYNC },
                         onOpenReminders = { page = Page.REMINDERS },
+                        onOpenAbout = { page = Page.ABOUT },
                         onClose = { page = Page.MAIN },
                     )
+                } else if (page == Page.ABOUT) {
+                    // Closing goes back to the settings page it came from.
+                    AboutPage(
+                        look = look,
+                        onOpenLicenses = { page = Page.LICENSES },
+                        onClose = { page = Page.SETTINGS },
+                    )
+                } else if (page == Page.LICENSES) {
+                    // Closing goes back to the About page it came from.
+                    LicensesPage(look = look, onClose = { page = Page.ABOUT })
                 } else if (page == Page.REMINDERS) {
                     // Closing goes back to the settings page it came from.
                     // The page saves and re-plans each change itself.
