@@ -48,6 +48,11 @@ class AboutLinksTest {
     }
 
     @Test
+    fun thePrivacyPolicyIsTheRepositorysPolicyFile() {
+        assertEquals("https://github.com/shanecuster/zerohour-android/blob/master/PRIVACY.md", PRIVACY_POLICY_URL)
+    }
+
+    @Test
     fun everyBrowserLinkIsHttps() {
         for (url in listOf(ANDROID_SOURCE_URL, CORE_SOURCE_URL, PRIVACY_POLICY_URL, PLAY_WEB_URL)) {
             assertTrue(url, isWebLink(url))

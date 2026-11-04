@@ -26,15 +26,11 @@ const val ANDROID_SOURCE_URL = "https://github.com/shanecuster/zerohour-android"
 const val CORE_SOURCE_URL = "https://github.com/shanecuster/zerohour"
 
 /**
- * The privacy policy's web address.
- *
- * TODO(privacy-url): PLACEHOLDER. Replace with the real privacy policy URL
- * before any release. The `.invalid` name can never resolve (it is reserved
- * for exactly this), so a tap opens only the browser's error page, and
- * scripts/check-release-apk.sh rejects any release APK that still contains
- * it, because the host is not on its allowed list.
+ * The privacy policy's web address: PRIVACY.md on the repository's master
+ * branch, so the page always shows the current policy (its "Last updated"
+ * line says when it last changed).
  */
-const val PRIVACY_POLICY_URL = "https://privacy-policy-url.invalid/REPLACE-ME"
+const val PRIVACY_POLICY_URL = "https://github.com/shanecuster/zerohour-android/blob/master/PRIVACY.md"
 
 /** The app's Google Play page in a web browser. */
 const val PLAY_WEB_URL = "https://play.google.com/store/apps/details?id=$PLAY_PACKAGE"

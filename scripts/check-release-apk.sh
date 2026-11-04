@@ -73,8 +73,9 @@ RELEASE_ABIS="arm64-v8a armeabi-v7a x86_64"
 #   www.w3.org            Android, AndroidX and the NDK compiler's own texts
 #   youtrack.jetbrains.com  Kotlin's standard library error messages
 #   docs.rs               a link in an error message of rustls (TLS)
-#   github.com            the About page's source-code links (the app's and
-#                         core's public repositories) and the share link
+#   github.com            the About page's privacy policy and source-code
+#                         links (the app's and core's public repositories)
+#                         and the share link
 #                         for installs not from Google Play; also the
 #                         JetBrains Mono link in the font's license text
 #   play.google.com       the About page's Google Play listing (share and
@@ -86,9 +87,6 @@ RELEASE_ABIS="arm64-v8a armeabi-v7a x86_64"
 #                         text (res/raw)
 #   fontawesome.com       Font Awesome's attribution (res/raw)
 #   mozilla.org           the Mozilla Public License 2.0's own text (res/raw)
-# The privacy policy's placeholder on a .invalid host is deliberately NOT
-# here: it fails this check (and the .invalid check) until the real address
-# replaces it.
 ALLOWED_HOSTS="couch.example.org
 android.googlesource.com
 r.android.com

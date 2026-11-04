@@ -175,12 +175,12 @@ its name) also makes `armeabi-v7a`. Override with
    `scripts/check-release-apk.sh` (see "Checking a release APK" below), which
    covers the `arm64-v8a`, `armeabi-v7a` and `x86_64` libraries, and the 16 KB
    page alignment Google Play requires for updates from 1 February 2027.
-4. **About page:** the privacy policy address (`PRIVACY_POLICY_URL` in
-   `app/src/main/kotlin/com/shanetalkstech/zerohour/about/AboutLinks.kt`) must
-   be the real one; while it is still the `.invalid` placeholder,
-   `scripts/check-release-apk.sh` fails. When a dependency or core's pin
-   changed, check the Open source licenses list as
-   `third_party/licenses/README.md` describes.
+4. **About page:** the Privacy policy row opens `PRIVACY.md` on `master`
+   (`PRIVACY_POLICY_URL` in
+   `app/src/main/kotlin/com/shanetalkstech/zerohour/about/AboutLinks.kt`), so
+   a policy change must be merged and pushed to `master` to reach users; update
+   its "Last updated" line. When a dependency or core's pin changed, check the
+   Open source licenses list as `third_party/licenses/README.md` describes.
 
 ### Checking a release APK
 
