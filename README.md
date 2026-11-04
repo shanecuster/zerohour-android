@@ -73,6 +73,27 @@ Each reminder shows as `REMINDER_FIRE` with its time (`origWhen`), plus one
 `REMINDER_REFILL` about a day ahead. Add `-s <serial>` after `adb` when more
 than one device is connected (`adb devices` lists them).
 
+## About
+
+**Settings → About ›** shows the installed version (read from the build, for
+example `zerohour 0.2.1 (4)`, with `debug` after it on debug builds) and these
+rows:
+
+- **Privacy policy**, **Source: Android app** and **Source: core and desktop
+  app** open the page in your browser.
+- **Share zerohour** opens Android's share sheet with a short text and a link:
+  the Google Play page if Google Play installed the app, otherwise this
+  repository.
+- **Rate on Google Play** opens the Play app (or the Play web page without
+  it). It is shown only when Google Play installed the app; sideloaded and
+  F-Droid installs don't have it. No Google Play library is used.
+- **Open source licenses** lists what is built into the app and opens each
+  license's full text, offline. Where each text comes from, and how to check
+  the list again after a dependency changes, is in `third_party/licenses/`.
+
+zerohour itself sends nothing from this page: each row hands a link to the app
+you pick. If no app can open it, the page says so.
+
 ## Building
 
 You need Android Studio (with the SDK and the NDK from SDK Manager → SDK
@@ -154,6 +175,12 @@ its name) also makes `armeabi-v7a`. Override with
    `scripts/check-release-apk.sh` (see "Checking a release APK" below), which
    covers the `arm64-v8a`, `armeabi-v7a` and `x86_64` libraries, and the 16 KB
    page alignment Google Play requires for updates from 1 February 2027.
+4. **About page:** the Privacy policy row opens `PRIVACY.md` on `master`
+   (`PRIVACY_POLICY_URL` in
+   `app/src/main/kotlin/com/shanetalkstech/zerohour/about/AboutLinks.kt`), so
+   a policy change must be merged and pushed to `master` to reach users; update
+   its "Last updated" line. When a dependency or core's pin changed, check the
+   Open source licenses list as `third_party/licenses/README.md` describes.
 
 ### Checking a release APK
 
@@ -273,8 +300,10 @@ the alarm request codes):
 ./gradlew :app:testDebugUnitTest
 ```
 
-## Licence
+## License
 
 MIT. The bundled font is JetBrainsMono Nerd Font Mono 3.5.1 (unmodified) under
 the SIL OFL 1.1, and the Font Awesome icons it carries are CC BY 4.0; see
-`third_party/fonts/`.
+`third_party/fonts/`. Every component built into the app, with its license's
+full text, is listed in the app under **Settings → About › → Open source
+licenses** (sources in `third_party/licenses/`).

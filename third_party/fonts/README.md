@@ -16,10 +16,10 @@ Nerd Fonts patches icon sets into JetBrains Mono 2.304. The *Mono* variant
 squeezes every icon into exactly one character cell, which keeps columns and
 box borders lined up (the same reason the terminal app recommends it).
 
-## Licences
+## Licenses
 
 - The font itself (JetBrains Mono, as patched by Nerd Fonts) is licensed under
-  the SIL Open Font License 1.1. The licence text from the release archive is
+  the SIL Open Font License 1.1. The license text from the release archive is
   in `OFL.txt` next to this file.
 - The only icons zerohour shows are Font Awesome 6.5.1 glyphs (the `nf-fa-*`
   names in `zerohour-core`'s `icons.rs`). Font Awesome's icons are licensed

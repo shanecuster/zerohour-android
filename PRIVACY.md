@@ -1,6 +1,6 @@
 # Privacy policy: zerohour for Android
 
-Last updated: 2026-10-22
+Last updated: 2026-11-04
 
 zerohour is a to-do list and countdown app. It does not collect your data, and
 nothing you do in it is sent to the developer. There are no accounts, no ads, no
@@ -60,6 +60,12 @@ the lock screen; Android's own lock-screen notification settings apply.
 If a future version writes an export file, it goes only to the location you pick
 in Android's file picker. If you pick a cloud folder, that service's policy
 applies to the file.
+
+## Links and sharing
+
+The About page has links (privacy policy, source code, store page) and a Share button. These hand an address or a short text to another app that you choose, such as your browser, the Play Store or the share sheet; what that app does with it is covered by its own policy. If the app was installed from Google Play, the Rate button opens the store listing. To decide whether to show that button, the app reads the name of the store that installed it. This stays on your phone.
+
+Settings → About → Open source licenses lists the open source components built into the app. Their license texts are stored in the app and open without any connection.
 
 ## Your control
 

@@ -87,6 +87,7 @@ private enum class RemindersRow { OFF, ON, LATE, BLOCKED }
  * │                                      │
  * │   Sync ›                             │
  * │   Reminders ›  on                    │
+ * │   About ›                            │
  * │                                      │
  * │ [ close ]                            │
  * ╰──────────────────────────────────────╯
@@ -102,7 +103,8 @@ private enum class RemindersRow { OFF, ON, LATE, BLOCKED }
  * database and a real one, then runs [onDataSwitched] (instead of
  * [onChanged]), so the app can also drop messages that belonged to the other
  * database. While the demo is in use the "Sync" row is greyed out, because
- * the demo never syncs. [onOpenSync] opens the sync screen,
+ * the demo never syncs. [onOpenSync] opens the sync screen, [onOpenReminders]
+ * the reminders page and [onOpenAbout] the About page;
  * [onClose] closes this one (the back gesture does too).
  */
 @Composable
@@ -113,6 +115,7 @@ fun SettingsPage(
     onDataSwitched: () -> Unit,
     onOpenSync: () -> Unit,
     onOpenReminders: () -> Unit,
+    onOpenAbout: () -> Unit,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -248,6 +251,15 @@ fun SettingsPage(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+
+                // Open on the demo too: nothing on it uses the database.
+                TapText(
+                    look,
+                    "  ${stringResource(R.string.settings_about)}",
+                    look.color(ColorSlot.FOREGROUND),
+                    onClick = onOpenAbout,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(look.cell.rows(1)))
             }
 
