@@ -20,7 +20,6 @@ zerohour uses) is added in front.
 | `license_mpl_2_0.txt` | option-ext 0.2.0 `LICENSE.txt` (the Mozilla Public License 2.0, also UniFFI's license) |
 | `license_cdla_permissive_2_0.txt` | webpki-roots 1.0.10 `LICENSE` |
 | `license_zlib.txt` | foldhash 0.2.0 `LICENSE` |
-| `license_unicode_3_0.txt` | unicode-ident 1.0.27 `LICENSE-UNICODE` |
 | `license_ofl_1_1.txt` | `third_party/fonts/OFL.txt` (from the Nerd Fonts v3.5.1 release) |
 | `license_cc_by_4_0.txt` | the Font Awesome attribution, then the SPDX text of CC BY 4.0 |
 | `license_sqlite.txt` | the public-domain blessing at the top of SQLite 3.53.2's `sqlite3.c` (bundled in libsqlite3-sys 0.38.2) |
