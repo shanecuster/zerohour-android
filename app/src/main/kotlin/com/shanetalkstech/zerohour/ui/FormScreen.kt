@@ -502,8 +502,11 @@ private fun FieldLine(
             }
         }
 
-        // The preview under the date and time: how the typed text was
-        // understood, in the colour core chose (it wraps under the value).
+        // The line under the row, if core gives one: how the typed date or
+        // time was understood, or the Nth weekday's next two dates under its
+        // Month row, in the colour core chose (it wraps under the value;
+        // core joins each date with non-breaking spaces, so a narrow screen
+        // breaks between dates, never inside one).
         val preview = row.preview
         if (preview != null) {
             BasicText(
