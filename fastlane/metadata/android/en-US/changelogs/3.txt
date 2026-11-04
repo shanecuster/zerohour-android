@@ -1,0 +1,4 @@
+- New repeat: the Nth weekday of a month, for holidays like Thanksgiving (4th Thursday of November), the last Monday of May, or the 1st Friday of every month.
+- A task with a due time is no longer late when the time passes, only once its day ends.
+- New colors: a soft red for Events, kept apart from the overdue red, and a title banner that fades to each theme's orange.
+- A new app icon: a green hourglass with peach sand.
