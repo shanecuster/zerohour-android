@@ -75,9 +75,17 @@ RELEASE_ABIS="arm64-v8a armeabi-v7a x86_64"
 #   docs.rs               a link in an error message of rustls (TLS)
 #   github.com            the About page's source-code links (the app's and
 #                         core's public repositories) and the share link
-#                         for installs not from Google Play
+#                         for installs not from Google Play; also the
+#                         JetBrains Mono link in the font's license text
 #   play.google.com       the About page's Google Play listing (share and
 #                         rate links for Play installs)
+#   www.apache.org        the Apache License 2.0's own text (res/raw)
+#   creativecommons.org   the CC BY 4.0 link in Font Awesome's attribution
+#                         (res/raw)
+#   scripts.sil.org       the OFL's link to its FAQ, in the font's license
+#                         text (res/raw)
+#   fontawesome.com       Font Awesome's attribution (res/raw)
+#   mozilla.org           the Mozilla Public License 2.0's own text (res/raw)
 # The privacy policy's placeholder on a .invalid host is deliberately NOT
 # here: it fails this check (and the .invalid check) until the real address
 # replaces it.
@@ -90,7 +98,12 @@ www.w3.org
 youtrack.jetbrains.com
 docs.rs
 github.com
-play.google.com"
+play.google.com
+www.apache.org
+creativecommons.org
+scripts.sil.org
+fontawesome.com
+mozilla.org"
 
 # Not addresses at all: core's setting names. The compiled Rust library keeps
 # its short texts back to back with nothing between them, so right after an
@@ -147,7 +160,11 @@ unzip -q "$APK" -d "$WORK"
 # the resources, the manifest), as opposed to libraries' prebuilt files.
 # `shopt -s nullglob` makes a pattern that matches nothing expand to nothing.
 shopt -s nullglob
-OWN_FILES=("$WORK"/lib/*/libzerohour_ffi.so "$WORK"/classes*.dex "$WORK/resources.arsc" "$WORK/AndroidManifest.xml")
+# `res/*.txt` are the app's own res/raw texts (the license texts of the
+# About page's licenses list): AGP renames res/raw files to short names
+# like res/0M.txt and keeps their .txt ending, while libraries' text files
+# stay under META-INF/.
+OWN_FILES=("$WORK"/lib/*/libzerohour_ffi.so "$WORK"/classes*.dex "$WORK/resources.arsc" "$WORK/AndroidManifest.xml" "$WORK"/res/*.txt)
 shopt -u nullglob
 
 echo "Checking $APK"

@@ -36,7 +36,7 @@ The Android launcher icon is drawn from the SVG, not from the PNG:
 If the SVG changes, copy its path data into both drawables again (and the
 debug copies), and its colours into `ic_launcher_colors.xml`.
 
-## Licence
+## License
 
 The artwork was made for zerohour and is licensed under the MIT License, the
-same licence as this repository (see `LICENSE` in the repository root).
+same license as this repository (see `LICENSE` in the repository root).
