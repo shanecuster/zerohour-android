@@ -7,8 +7,8 @@
 <resources>
     <!-- Background layer: Catppuccin Macchiato "base", a dark navy. -->
     <color name="ic_launcher_background">#24273A</color>
-    <!-- The hourglass outline: Macchiato "mauve". -->
-    <color name="ic_launcher_hourglass">#C6A0F6</color>
-    <!-- The sand in the bottom half: Macchiato "green". -->
-    <color name="ic_launcher_sand">#A6DA95</color>
+    <!-- The hourglass outline: Macchiato "green". -->
+    <color name="ic_launcher_hourglass">#A6DA95</color>
+    <!-- The sand in the bottom half: Macchiato "peach" (Catppuccin's orange). -->
+    <color name="ic_launcher_sand">#F5A97F</color>
 </resources>

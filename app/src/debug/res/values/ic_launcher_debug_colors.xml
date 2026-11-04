@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Debug builds only: the colour of the badge on the debug app's launcher icon
-  (Catppuccin Macchiato "peach"), so the .debug app is easy to tell from the
-  release app on the same phone.
+  Debug builds only: the colour of the ring on the debug app's launcher icon
+  (Catppuccin Macchiato "blue", a colour the icon itself does not use), so
+  the .debug app is easy to tell from the release app on the same phone.
 -->
 <resources>
-    <color name="ic_launcher_debug_badge">#F5A97F</color>
+    <color name="ic_launcher_debug_ring">#8AADF4</color>
 </resources>

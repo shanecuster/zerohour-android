@@ -10,7 +10,8 @@
   units map onto the 108dp, and the group scales the shapes to 90% around the
   centre (256, 256) so the hourglass's corners stay inside that circle.
 
-  Round line caps and joins are kept, as in the SVG.
+  Round line caps and joins are kept, as in the SVG. The colours (a green
+  outline and peach sand) come from values/ic_launcher_colors.xml.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"

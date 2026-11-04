@@ -1,8 +1,9 @@
 # App icon
 
-The launcher icon is a purple hourglass with green sand on a dark navy
-background, in the Catppuccin Macchiato palette (base `#24273a`, mauve
-`#c6a0f6`, green `#a6da95`).
+The launcher icon is a green hourglass with peach sand on a dark navy
+background, in the Catppuccin Macchiato palette (base `#24273a`, green
+`#a6da95`, peach `#f5a97f`). This is artwork option C9; it replaced an
+earlier version with the same shapes in mauve and green.
 
 ## Source
 
@@ -10,8 +11,9 @@ background, in the Catppuccin Macchiato palette (base `#24273a`, mauve
   Its shapes stay inside the middle of the square, so Android's icon masks
   never cut them.
 - `fastlane/metadata/android/en-US/images/icon.png`: the 512×512 store icon,
-  a PNG rendered from the SVG. Its colours are exactly as rendered; only a
-  fully opaque alpha channel was added (32-bit RGBA), as Google Play asks.
+  a PNG rendered from the SVG and exported with it, copied unchanged. It is
+  32-bit RGBA with every pixel fully opaque, as Google Play asks
+  (sha256 `6243ec6ffa0dbf86e137c0934ab2976b74e38b55952b901cf3552af2972b19c6`).
 
 The Android launcher icon is drawn from the SVG, not from the PNG:
 
@@ -25,11 +27,14 @@ The Android launcher icon is drawn from the SVG, not from the PNG:
   one colour, for themed icons (Android 13+).
 - `app/src/main/res/mipmap-anydpi/ic_launcher.xml` and `ic_launcher_round.xml`:
   the adaptive icon that stacks the three layers.
-- `app/src/debug/res/`: debug builds only, the same layers plus a small peach
-  badge, so the `.debug` app is easy to tell from the release app.
+- `app/src/debug/res/`: debug builds only, the same layers with the
+  hourglass at 84% inside a thin ring in Catppuccin Macchiato blue
+  (`#8aadf4`, a colour the icon does not use), so the `.debug` app is easy to
+  tell from the release app. The ring is drawn in the monochrome layer too,
+  so it still shows with themed icons.
 
 If the SVG changes, copy its path data into both drawables again (and the
-debug copies).
+debug copies), and its colours into `ic_launcher_colors.xml`.
 
 ## Licence
 
