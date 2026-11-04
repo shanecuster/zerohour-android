@@ -73,6 +73,14 @@ RELEASE_ABIS="arm64-v8a armeabi-v7a x86_64"
 #   www.w3.org            Android, AndroidX and the NDK compiler's own texts
 #   youtrack.jetbrains.com  Kotlin's standard library error messages
 #   docs.rs               a link in an error message of rustls (TLS)
+#   github.com            the About page's source-code links (the app's and
+#                         core's public repositories) and the share link
+#                         for installs not from Google Play
+#   play.google.com       the About page's Google Play listing (share and
+#                         rate links for Play installs)
+# The privacy policy's placeholder on a .invalid host is deliberately NOT
+# here: it fails this check (and the .invalid check) until the real address
+# replaces it.
 ALLOWED_HOSTS="couch.example.org
 android.googlesource.com
 r.android.com
@@ -80,7 +88,9 @@ goo.gle
 schemas.android.com
 www.w3.org
 youtrack.jetbrains.com
-docs.rs"
+docs.rs
+github.com
+play.google.com"
 
 # Not addresses at all: core's setting names. The compiled Rust library keeps
 # its short texts back to back with nothing between them, so right after an
