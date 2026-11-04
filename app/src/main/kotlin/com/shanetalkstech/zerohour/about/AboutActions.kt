@@ -3,8 +3,8 @@ package com.shanetalkstech.zerohour.about
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
+import androidx.core.net.toUri
 
 // The Android side of the About page: asking Android which app installed
 // zerohour, and handing links to other apps (the browser, Google Play, the
@@ -57,7 +57,9 @@ private fun startOther(context: Context, intent: Intent): Boolean = try {
 fun openWebLink(context: Context, url: String): Boolean {
     if (!isWebLink(url)) return false
     // ACTION_VIEW means "show this to the user"; Android picks the browser.
-    return startOther(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    // `toUri()` (from androidx core-ktx) turns the text into Android's
+    // address type, `Uri`.
+    return startOther(context, Intent(Intent.ACTION_VIEW, url.toUri()))
 }
 
 /**
@@ -66,7 +68,7 @@ fun openWebLink(context: Context, url: String): Boolean {
  */
 fun openPlayListing(context: Context): Boolean =
     // `||` tries the right side only when the left side is false.
-    startOther(context, Intent(Intent.ACTION_VIEW, Uri.parse(PLAY_APP_URI))) ||
+    startOther(context, Intent(Intent.ACTION_VIEW, PLAY_APP_URI.toUri())) ||
         openWebLink(context, PLAY_WEB_URL)
 
 /**
