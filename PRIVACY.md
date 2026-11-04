@@ -1,6 +1,6 @@
 # Privacy policy: zerohour for Android
 
-Last updated: 2026-10-22
+Last updated: 2026-11-04
 
 zerohour is a to-do list and countdown app. It does not collect your data, and
 nothing you do in it is sent to the developer. There are no accounts, no ads, no
