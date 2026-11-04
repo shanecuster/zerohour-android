@@ -461,7 +461,8 @@ private fun FieldLine(
                 FormField.TITLE, FormField.DATE, FormField.TIME, FormField.EVERY_N, FormField.NOTES ->
                     TextInput(look, row.field, row.value, isFocused, onFocus, onText, Modifier.weight(1f))
 
-                FormField.PRIORITY, FormField.REPEAT, FormField.EVERY_UNIT -> {
+                FormField.PRIORITY, FormField.REPEAT, FormField.EVERY_UNIT,
+                FormField.ORDINAL, FormField.WEEKDAY, FormField.MONTH -> {
                     // "‹ Medium ›": the arrows step back and forward through
                     // the choices, starting in the value column like the
                     // terminal app's. The arrows' blanks are part of their
@@ -501,8 +502,11 @@ private fun FieldLine(
             }
         }
 
-        // The preview under the date and time: how the typed text was
-        // understood, in the colour core chose (it wraps under the value).
+        // The line under the row, if core gives one: how the typed date or
+        // time was understood, or the Nth weekday's next two dates under its
+        // Month row, in the colour core chose (it wraps under the value;
+        // core joins each date with non-breaking spaces, so a narrow screen
+        // breaks between dates, never inside one).
         val preview = row.preview
         if (preview != null) {
             BasicText(

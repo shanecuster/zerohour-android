@@ -34,6 +34,8 @@ pub enum ColorSlot {
     Border,
     /// Highlights.
     Accent,
+    /// The right-hand end of the title banner's gradient (each theme's orange).
+    BannerEnd,
     /// The selected row's background.
     Selection,
     /// The Tasks colour.
@@ -59,6 +61,7 @@ impl From<Slot> for ColorSlot {
             Slot::Muted => ColorSlot::Muted,
             Slot::Border => ColorSlot::Border,
             Slot::Accent => ColorSlot::Accent,
+            Slot::BannerEnd => ColorSlot::BannerEnd,
             Slot::Selection => ColorSlot::Selection,
             Slot::Task => ColorSlot::Task,
             Slot::Event => ColorSlot::Event,
@@ -146,8 +149,8 @@ pub struct Banner {
     /// mode). Every row has the same number of characters.
     pub lines: Vec<String>,
     /// One colour per column of the letters: a gradient from the theme's
-    /// accent colour at the left edge to its event colour at the right edge,
-    /// the same as the terminal app.
+    /// accent colour at the left edge to its banner_end colour (the theme's
+    /// orange) at the right edge, the same as the terminal app.
     pub column_colors: Vec<RgbColor>,
     /// "7 days to Christmas", or today's date when nothing is coming up.
     pub tagline: String,
@@ -179,13 +182,15 @@ pub struct MainScreen {
 }
 
 /// The banner gradient colour for one column, as in the terminal app: the
-/// accent colour at column 0, the event colour at the last column, and evenly
-/// mixed in between (core's `Rgb::lerp` does the mixing).
+/// accent colour at column 0, the banner_end colour at the last column, and
+/// evenly mixed in between (core's `Rgb::lerp` does the mixing). The right
+/// end has its own slot so the banner no longer changes with the Events
+/// colour.
 fn column_color(theme: &Theme, column: usize, width: usize) -> RgbColor {
     // How far across the banner this column is: 0.0 at the left, 1.0 at the
     // right. `width.max(2) - 1` is never 0, so this never divides by zero.
     let t = column as f32 / (width.max(2) - 1) as f32;
-    theme.accent.lerp(theme.event, t).into()
+    theme.accent.lerp(theme.banner_end, t).into()
 }
 
 // A second `#[uniffi::export] impl` block for the same object is fine: UniFFI
@@ -338,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn banner_gradient_runs_from_accent_to_event() {
+    fn banner_gradient_runs_from_accent_to_banner_end() {
         let screen = demo().main_screen(NOW.to_string(), true).unwrap();
         let banner = &screen.banner;
         let width = banner.lines[0].chars().count();
@@ -346,7 +351,10 @@ mod tests {
         // The demo database uses the default theme, which is first in the table.
         let theme = &THEMES[0];
         assert_eq!(banner.column_colors[0], RgbColor::from(theme.accent));
-        assert_eq!(banner.column_colors[width - 1], RgbColor::from(theme.event));
+        assert_eq!(
+            banner.column_colors[width - 1],
+            RgbColor::from(theme.banner_end)
+        );
     }
 
     #[test]

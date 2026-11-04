@@ -24,8 +24,8 @@ use zerohour_core::calendar::{
     WeekStart as CoreWeekStart, add_months, month_grid, month_title, same_month,
 };
 use zerohour_core::clock::TimeFormat;
-use zerohour_core::form::{Field, FormInput, RepeatChoice};
-use zerohour_core::model::{Kind, Priority, Unit};
+use zerohour_core::form::{Field, FormInput};
+use zerohour_core::model::Kind;
 use zerohour_core::repeat::parse_date_input;
 use zerohour_core::theme::Slot;
 
@@ -83,6 +83,12 @@ pub enum FormField {
     Repeat,
     /// Seven day checkboxes, for the weekday repeats.
     Days,
+    /// Choice (Nth-weekday repeats): 1st to 4th, or last.
+    Ordinal,
+    /// Choice (Nth-weekday repeats): the day of the week.
+    Weekday,
+    /// Choice (Nth-weekday repeats): a month, or every month.
+    Month,
     /// Free text, digits only: the N of "every N", for the custom repeat.
     EveryN,
     /// Choice: days, weeks or months, for the custom repeat.
@@ -104,10 +110,36 @@ impl From<Field> for FormField {
             Field::Time => FormField::Time,
             Field::Repeat => FormField::Repeat,
             Field::Days => FormField::Days,
+            Field::Ordinal => FormField::Ordinal,
+            Field::Weekday => FormField::Weekday,
+            Field::Month => FormField::Month,
             Field::EveryN => FormField::EveryN,
             Field::EveryUnit => FormField::EveryUnit,
             Field::KeepAfterPass => FormField::KeepAfterPass,
             Field::Notes => FormField::Notes,
+        }
+    }
+}
+
+/// Converts the mirror back into core's field, so a tap Kotlin reports can be
+/// handed to core's own `FormInput::step_choice`.
+impl From<FormField> for Field {
+    /// One arm per field; the compiler checks none is missed.
+    fn from(field: FormField) -> Field {
+        match field {
+            FormField::Title => Field::Title,
+            FormField::Priority => Field::Priority,
+            FormField::Date => Field::Date,
+            FormField::Time => Field::Time,
+            FormField::Repeat => Field::Repeat,
+            FormField::Days => Field::Days,
+            FormField::Ordinal => Field::Ordinal,
+            FormField::Weekday => Field::Weekday,
+            FormField::Month => Field::Month,
+            FormField::EveryN => Field::EveryN,
+            FormField::EveryUnit => Field::EveryUnit,
+            FormField::KeepAfterPass => Field::KeepAfterPass,
+            FormField::Notes => Field::Notes,
         }
     }
 }
@@ -161,8 +193,8 @@ pub struct DayBox {
 ///
 /// Every row has a label; what else is filled in depends on [`FormField`]:
 /// text fields and choice fields use `value`, the Days row uses `days`, the
-/// keep-after-pass row uses `checked`. The date and time rows also have a
-/// `preview` line under them.
+/// keep-after-pass row uses `checked`. The date and time rows, and the Nth
+/// weekday's Month row, also have a `preview` line under them (core decides).
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct FieldRow {
     /// Which input this is (Kotlin picks how to draw it from this).
@@ -170,15 +202,19 @@ pub struct FieldRow {
     /// The label, e.g. "Due date" for a task, "Date" for an event (core's words).
     pub label: String,
     /// Text fields: the text as typed. Choice fields: the chosen option's name
-    /// ("Medium", "Mon–Thu", "weeks"). Empty for the other rows.
+    /// ("Medium", "Mon–Thu", "weeks", "4th", "Thu", "every month"), from core's
+    /// `field_value`. Empty for the two kinds of checkbox.
     pub value: String,
     /// The Days row's seven checkboxes, in the calendar's weekday order.
     /// Empty for the other rows.
     pub days: Vec<DayBox>,
     /// The keep-after-pass checkbox. False for the other rows.
     pub checked: bool,
-    /// The line under the date or time: how the typed text was understood, or
-    /// how to type one, with its colour. `None` for the other rows.
+    /// The line under the row, with its colour: under the date or time, how
+    /// the typed text was understood or how to type one; under the Nth
+    /// weekday's Month, the rule's next two dates ("→ Thu Nov 26 2026, Thu
+    /// Nov 25 2027", each date joined by non-breaking spaces so a wrap falls
+    /// between dates). `None` for the other rows.
     pub preview: Option<TextLabel>,
 }
 
@@ -277,22 +313,6 @@ fn parse_iso(iso: &str) -> Result<NaiveDate, FfiError> {
     })
 }
 
-/// Moves one step through `list` from `current`, forward or back, wrapping
-/// around at both ends (like the terminal app's ←/→ on a choice field).
-/// `PartialEq` lets `position` compare the items; `Copy` lets us return one.
-fn step_through<T: PartialEq + Copy>(list: &[T], current: T, forward: bool) -> T {
-    let len = list.len();
-    // Where the current value is; the first entry if it is somehow missing.
-    let i = list.iter().position(|&x| x == current).unwrap_or(0);
-    // Adding `len - 1` is the same as subtracting 1, without going below 0.
-    let next = if forward {
-        (i + 1) % len
-    } else {
-        (i + len - 1) % len
-    };
-    list[next]
-}
-
 #[uniffi::export]
 impl ItemForm {
     /// Chooses Task or Event (the first step when adding). Ignored when
@@ -324,25 +344,14 @@ impl ItemForm {
         Ok(())
     }
 
-    /// One tap on a choice field's `›` (`forward = true`) or `‹` arrow: steps
-    /// Priority, Repeat or Unit through core's list, wrapping round. On the
-    /// keep-after-pass checkbox, either arrow (or a tap) flips it.
+    /// One tap on a choice field's `›` (`forward = true`) or `‹` arrow: core
+    /// steps Priority, Repeat, Unit or the Nth weekday's On the / Weekday /
+    /// Month through its own lists, wrapping round (picking a repeat preset
+    /// also fills in its days, and "nth weekday" fills its rows in from a
+    /// full date). On the keep-after-pass checkbox, either arrow (or a tap)
+    /// flips it. Text fields and the day boxes are left alone.
     pub fn step_choice(&self, field: FormField, forward: bool) -> Result<(), FfiError> {
-        let mut s = self.lock()?;
-        let input = &mut s.input;
-        match field {
-            FormField::Priority => {
-                input.priority = step_through(&Priority::ALL, input.priority, forward);
-            }
-            FormField::Repeat => {
-                // `set_repeat` also fills in a preset's days.
-                let choice = step_through(&RepeatChoice::ALL, input.repeat, forward);
-                input.set_repeat(choice);
-            }
-            FormField::EveryUnit => input.unit = step_through(&Unit::ALL, input.unit, forward),
-            FormField::KeepAfterPass => input.keep_after_pass = !input.keep_after_pass,
-            _ => {}
-        }
+        self.lock()?.input.step_choice(field.into(), forward);
         Ok(())
     }
 
@@ -429,71 +438,25 @@ impl ItemForm {
         let rows = input
             .fields()
             .into_iter()
-            .map(|field| {
-                // Start with an empty row and fill in what this field uses.
-                // `..` below copies the rest of `blank` into each variant.
-                let blank = FieldRow {
-                    field: field.into(),
-                    label: field.label(kind).to_string(),
-                    value: String::new(),
-                    days: Vec::new(),
-                    checked: false,
-                    preview: None,
-                };
-                match field {
-                    Field::Title => FieldRow {
-                        value: input.title.clone(),
-                        ..blank
-                    },
-                    Field::Priority => FieldRow {
-                        value: input.priority.label().to_string(),
-                        ..blank
-                    },
-                    Field::Date => FieldRow {
-                        value: input.date_text.clone(),
-                        preview: Some(preview(input.date_preview(today))),
-                        ..blank
-                    },
-                    Field::Time => FieldRow {
-                        value: input.time_text.clone(),
-                        preview: Some(preview(input.time_preview(s.time_format))),
-                        ..blank
-                    },
-                    Field::Repeat => FieldRow {
-                        value: input.repeat.label().to_string(),
-                        ..blank
-                    },
-                    Field::Days => FieldRow {
-                        // Pair each weekday (in display order) with its label.
-                        days: s
-                            .week_start
-                            .weekdays()
-                            .iter()
-                            .zip(s.week_start.day_labels())
-                            .map(|(&day, label)| DayBox {
-                                label: label.to_string(),
-                                on: input.days.contains(day),
-                            })
-                            .collect(),
-                        ..blank
-                    },
-                    Field::EveryN => FieldRow {
-                        value: input.every_n.clone(),
-                        ..blank
-                    },
-                    Field::EveryUnit => FieldRow {
-                        value: input.unit.as_str().to_string(),
-                        ..blank
-                    },
-                    Field::KeepAfterPass => FieldRow {
-                        checked: input.keep_after_pass,
-                        ..blank
-                    },
-                    Field::Notes => FieldRow {
-                        value: input.notes.clone(),
-                        ..blank
-                    },
-                }
+            .map(|field| FieldRow {
+                field: field.into(),
+                label: field.label(kind).to_string(),
+                // Text and choice fields show core's text for the value. The
+                // two kinds of checkbox are drawn from `days` and `checked`
+                // instead, so their value stays empty.
+                value: match field {
+                    Field::Days | Field::KeepAfterPass => String::new(),
+                    _ => input.field_value(field),
+                },
+                days: if field == Field::Days {
+                    day_boxes(input, s.week_start)
+                } else {
+                    Vec::new()
+                },
+                checked: field == Field::KeepAfterPass && input.keep_after_pass,
+                // Core decides which rows have a line under them (the date,
+                // the time, the Nth weekday's next dates) and what it says.
+                preview: input.preview(field, today, s.time_format).map(preview),
             })
             .collect();
 
@@ -510,6 +473,20 @@ impl ItemForm {
             calendar,
         })
     }
+}
+
+/// The Days row's seven checkboxes: each weekday, in the order the week
+/// start puts them, with its two-letter label and whether it is ticked.
+fn day_boxes(input: &FormInput, week_start: CoreWeekStart) -> Vec<DayBox> {
+    week_start
+        .weekdays()
+        .iter()
+        .zip(week_start.day_labels())
+        .map(|(&day, label)| DayBox {
+            label: label.to_string(),
+            on: input.days.contains(day),
+        })
+        .collect()
 }
 
 /// Turns core's (text, slot) preview into a label for Kotlin.
@@ -659,6 +636,63 @@ mod tests {
         form.step_choice(FormField::Repeat, false).unwrap();
         assert_eq!(row(&form, FormField::Repeat).value, "pick days");
         assert!(fields(&form).contains(&FormField::Days));
+    }
+
+    #[test]
+    fn nth_weekday_rows_are_stepped_and_previewed_by_core() {
+        let form = blank();
+        form.set_text(FormField::Date, "2026-11-26".into()).unwrap();
+        // none, daily, weekdays, Mon–Thu, weekly, monthly, yearly, nth weekday.
+        for _ in 0..7 {
+            form.step_choice(FormField::Repeat, true).unwrap();
+        }
+        assert_eq!(row(&form, FormField::Repeat).value, "nth weekday");
+        // Core fills the three rows in from the full date: Thanksgiving 2026.
+        let rows = form.view(NOW.into()).unwrap().rows;
+        let order: Vec<FormField> = rows.iter().map(|r| r.field).collect();
+        assert_eq!(
+            order[4..8],
+            [
+                FormField::Repeat,
+                FormField::Ordinal,
+                FormField::Weekday,
+                FormField::Month
+            ]
+        );
+        let labels: Vec<(&str, &str)> = rows[5..8]
+            .iter()
+            .map(|r| (r.label.as_str(), r.value.as_str()))
+            .collect();
+        assert_eq!(
+            labels,
+            [("On the", "4th"), ("Weekday", "Thu"), ("Month", "Nov")]
+        );
+        // The Month row's line: the next two dates, each joined by
+        // non-breaking spaces (U+00A0) so a wrap falls between dates.
+        let next = row(&form, FormField::Month).preview.unwrap();
+        // `nb` writes a date the way core does, with non-breaking spaces.
+        let nb = |date: &str| date.replace(' ', "\u{a0}");
+        assert_eq!(
+            next.text,
+            format!("→ {}, {}", nb("Thu Nov 26 2026"), nb("Thu Nov 25 2027"))
+        );
+        assert_eq!(next.slot, ColorSlot::Ok);
+        // The other rows have no line under them.
+        assert!(row(&form, FormField::Ordinal).preview.is_none());
+        // Each row steps through core's list and wraps.
+        form.step_choice(FormField::Ordinal, true).unwrap();
+        assert_eq!(row(&form, FormField::Ordinal).value, "last");
+        form.step_choice(FormField::Ordinal, true).unwrap();
+        assert_eq!(row(&form, FormField::Ordinal).value, "1st");
+        form.step_choice(FormField::Weekday, true).unwrap();
+        assert_eq!(row(&form, FormField::Weekday).value, "Fri");
+        form.step_choice(FormField::Month, true).unwrap();
+        assert_eq!(row(&form, FormField::Month).value, "Dec");
+        form.step_choice(FormField::Month, true).unwrap();
+        assert_eq!(row(&form, FormField::Month).value, "every month");
+        // A text field ignores the arrows.
+        form.step_choice(FormField::Title, true).unwrap();
+        assert_eq!(row(&form, FormField::Title).value, "");
     }
 
     #[test]

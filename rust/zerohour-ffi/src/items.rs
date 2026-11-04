@@ -341,6 +341,50 @@ mod tests {
     }
 
     #[test]
+    fn an_nth_weekday_task_survives_a_sync_document_and_completes_elsewhere() {
+        use zerohour_core::sync::doc::{item_from_doc, item_to_doc};
+
+        // Phone A: Thanksgiving through the form ("nth weekday" is seven
+        // steps on from "none"; the full date fills in 4th / Thu / Nov).
+        let phone_a = empty();
+        let id = add(&phone_a, ItemKind::Task, "Thanksgiving", "2026-11-26", 7);
+        let item = phone_a.lock().unwrap().get_item(&id).unwrap().unwrap();
+        assert_eq!(item.repeat.to_db_string(), "nth:4:thu:nov");
+
+        // The sync document: version 3 (so builds that only know v2 skip it
+        // as newer instead of dropping it), with the rule as stored.
+        let doc = item_to_doc(&item, None);
+        assert_eq!(doc["v"].as_u64(), Some(3));
+        assert_eq!(doc["repeat"].as_str(), Some("nth:4:thu:nov"));
+        let decoded = item_from_doc(&doc).unwrap();
+        assert_eq!(decoded.repeat, item.repeat);
+        assert_eq!(decoded.date, item.date);
+
+        // Phone B: a second database receives the decoded item, and
+        // completing it through the FFI makes next year's Thanksgiving.
+        let phone_b = empty();
+        phone_b.lock().unwrap().insert_item(&decoded).unwrap();
+        assert_eq!(
+            phone_b.complete_task(id.clone(), NOW.into()).unwrap(),
+            CompleteOutcome::Done {
+                title: "Thanksgiving".into(),
+                next_due: Some("Thu Nov 25".into())
+            }
+        );
+        let open: Vec<_> = phone_b
+            .lock()
+            .unwrap()
+            .list_items()
+            .unwrap()
+            .into_iter()
+            .filter(|i| !i.is_completed())
+            .collect();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].repeat, item.repeat);
+        assert_eq!(open[0].date.unwrap().to_string(), "2027-11-25");
+    }
+
+    #[test]
     fn events_are_not_completed() {
         let db = empty();
         let id = add(&db, ItemKind::Event, "Lake trip", "2026-11-01", 0);

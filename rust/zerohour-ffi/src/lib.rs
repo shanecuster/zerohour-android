@@ -109,7 +109,7 @@ impl From<Rgb> for RgbColor {
     }
 }
 
-/// The eleven colour slots every zerohour theme fills in. Mirror of core's
+/// The twelve colour slots every zerohour theme fills in. Mirror of core's
 /// `Theme` colours (see `zerohour_core::theme::Theme` for what each slot is
 /// used for). The names here match core's fields one-to-one.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -124,6 +124,9 @@ pub struct ThemePalette {
     pub border: RgbColor,
     /// Highlights: the header, key hints, focused form field.
     pub accent: RgbColor,
+    /// The right-hand end of the title banner's gradient (each theme's
+    /// orange; Gruvbox's yellow, since its accent is already orange).
+    pub banner_end: RgbColor,
     /// Background of the selected row.
     pub selection: RgbColor,
     /// The Tasks section colour.
@@ -152,6 +155,7 @@ impl From<&Theme> for ThemePalette {
             muted: t.muted.into(),
             border: t.border.into(),
             accent: t.accent.into(),
+            banner_end: t.banner_end.into(),
             selection: t.selection.into(),
             task: t.task.into(),
             event: t.event.into(),
