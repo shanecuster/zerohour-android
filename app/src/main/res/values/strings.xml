@@ -241,4 +241,40 @@
     <!-- Replaces a reminder's text when Done could not complete the task.
          %1$s is the reason, in core's words. -->
     <string name="reminder_done_failed">Couldn\'t mark it done: %1$s</string>
+    <!-- The Open source licenses page (Settings › About › Open source
+         licenses). Component names and version numbers are proper names, so
+         they are not translated. -->
+    <string name="licenses_title">Open source licenses</string>
+    <string name="licenses_hint">Built into zerohour. Tap one to read its license.</string>
+    <string name="licenses_back">[ back ]</string>
+    <string name="licenses_read">%1$s ›</string>
+    <string name="lic_zerohour" translatable="false">zerohour, zerohour-core and the app icon</string>
+    <string name="lic_font" translatable="false">JetBrainsMono Nerd Font Mono 3.5.1</string>
+    <string name="lic_font_awesome" translatable="false">Font Awesome 6.5.1 icons</string>
+    <string name="lic_font_awesome_attribution">Font Awesome by Fonticons, Inc. (fontawesome.com), licensed under CC BY 4.0. Shown through the Nerd Font, which resized the icons to one character cell.</string>
+    <string name="lic_sqlite" translatable="false">SQLite 3.53.2</string>
+    <string name="lic_android" translatable="false">AndroidX and Jetpack Compose, Kotlin, kotlinx.coroutines, Guava listenablefuture, JSpecify, JetBrains annotations</string>
+    <string name="lic_jna" translatable="false">JNA 5.17.0</string>
+    <string name="lic_rust_apache" translatable="false">Rust crates: android_system_properties, anyhow, base64, bitflags, camino, cargo-platform, cfg-if, chrono, directories, dirs-sys, equivalent, errno, fallible-iterator, fallible-streaming-iterator, fastrand, getrandom, hashbrown, hashlink, heck, http, httparse, iana-time-zone, indexmap, itoa, libc, linux-raw-sys, log, num-traits, once_cell, percent-encoding, rustix, rustls-pki-types, semver, serde, serde_core, serde_json, smallvec, static_assertions, tempfile, thiserror, ureq, ureq-proto, utf8-zero, uuid, zeroize</string>
+    <string name="lic_mit_others" translatable="false">bytes, rusqlite, libsqlite3-sys, cargo_metadata, zmij, memchr; libffi (inside JNA)</string>
+    <string name="lic_uniffi" translatable="false">UniFFI 0.32.2 (uniffi, uniffi_core, uniffi_pipeline), option-ext</string>
+    <string name="lic_rustls" translatable="false">rustls, rustls-webpki, untrusted</string>
+    <string name="lic_ring" translatable="false">ring 0.17.14</string>
+    <string name="lic_webpki_roots" translatable="false">webpki-roots 1.0.10 (Mozilla\'s root certificates)</string>
+    <string name="lic_bsd" translatable="false">subtle, sha1_smol</string>
+    <string name="lic_foldhash" translatable="false">foldhash</string>
+    <!-- License names. -->
+    <string name="license_mit">MIT</string>
+    <string name="license_ofl">SIL Open Font License 1.1</string>
+    <string name="license_cc_by">CC BY 4.0</string>
+    <string name="license_public_domain">Public domain</string>
+    <string name="license_apache">Apache License 2.0</string>
+    <string name="license_apache_or_mit">Apache License 2.0 (each also offers MIT)</string>
+    <string name="license_apache_or_lgpl">Apache License 2.0 (also offered under LGPL 2.1)</string>
+    <string name="license_mpl">Mozilla Public License 2.0</string>
+    <string name="license_isc">ISC</string>
+    <string name="license_ring">Apache 2.0 and ISC</string>
+    <string name="license_cdla">CDLA-Permissive-2.0</string>
+    <string name="license_bsd">BSD 3-Clause</string>
+    <string name="license_zlib">zlib</string>
 </resources>
