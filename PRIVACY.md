@@ -67,6 +67,14 @@ You can edit or delete any task or event at any time, turn sync off, and
 uninstall the app. Data already copied to your own sync server is removed from
 that server on the next sync after you delete it here.
 
+## The About page
+
+The About page's links (privacy policy, source code, Google Play, and Share)
+only hand an address to another app you choose: your browser, the Google Play
+app or the app you pick in the share sheet. zerohour itself sends nothing.
+To decide whether to show the "Rate on Google Play" row, the app asks Android
+which app installed it; that check stays on the phone.
+
 ## Google Play
 
 If you installed from Google Play, Google may collect crash and performance data

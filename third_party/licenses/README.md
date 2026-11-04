@@ -1,4 +1,4 @@
-# Licence texts shown in the app
+# License texts shown in the app
 
 The app's "Open source licenses" page (Settings › About › Open source
 licenses) lists what is built into the app and opens each license's full text
