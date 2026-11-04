@@ -1,0 +1,2 @@
+- An About page, from Settings: the app version, the privacy policy, the source code, open source licenses, and sharing the app.
+- On Google Play installs, a link to rate the app.
