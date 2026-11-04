@@ -639,6 +639,63 @@ mod tests {
     }
 
     #[test]
+    fn nth_weekday_rows_are_stepped_and_previewed_by_core() {
+        let form = blank();
+        form.set_text(FormField::Date, "2026-11-26".into()).unwrap();
+        // none, daily, weekdays, Mon–Thu, weekly, monthly, yearly, nth weekday.
+        for _ in 0..7 {
+            form.step_choice(FormField::Repeat, true).unwrap();
+        }
+        assert_eq!(row(&form, FormField::Repeat).value, "nth weekday");
+        // Core fills the three rows in from the full date: Thanksgiving 2026.
+        let rows = form.view(NOW.into()).unwrap().rows;
+        let order: Vec<FormField> = rows.iter().map(|r| r.field).collect();
+        assert_eq!(
+            order[4..8],
+            [
+                FormField::Repeat,
+                FormField::Ordinal,
+                FormField::Weekday,
+                FormField::Month
+            ]
+        );
+        let labels: Vec<(&str, &str)> = rows[5..8]
+            .iter()
+            .map(|r| (r.label.as_str(), r.value.as_str()))
+            .collect();
+        assert_eq!(
+            labels,
+            [("On the", "4th"), ("Weekday", "Thu"), ("Month", "Nov")]
+        );
+        // The Month row's line: the next two dates, each joined by
+        // non-breaking spaces (U+00A0) so a wrap falls between dates.
+        let next = row(&form, FormField::Month).preview.unwrap();
+        // `nb` writes a date the way core does, with non-breaking spaces.
+        let nb = |date: &str| date.replace(' ', "\u{a0}");
+        assert_eq!(
+            next.text,
+            format!("→ {}, {}", nb("Thu Nov 26 2026"), nb("Thu Nov 25 2027"))
+        );
+        assert_eq!(next.slot, ColorSlot::Ok);
+        // The other rows have no line under them.
+        assert!(row(&form, FormField::Ordinal).preview.is_none());
+        // Each row steps through core's list and wraps.
+        form.step_choice(FormField::Ordinal, true).unwrap();
+        assert_eq!(row(&form, FormField::Ordinal).value, "last");
+        form.step_choice(FormField::Ordinal, true).unwrap();
+        assert_eq!(row(&form, FormField::Ordinal).value, "1st");
+        form.step_choice(FormField::Weekday, true).unwrap();
+        assert_eq!(row(&form, FormField::Weekday).value, "Fri");
+        form.step_choice(FormField::Month, true).unwrap();
+        assert_eq!(row(&form, FormField::Month).value, "Dec");
+        form.step_choice(FormField::Month, true).unwrap();
+        assert_eq!(row(&form, FormField::Month).value, "every month");
+        // A text field ignores the arrows.
+        form.step_choice(FormField::Title, true).unwrap();
+        assert_eq!(row(&form, FormField::Title).value, "");
+    }
+
+    #[test]
     fn day_boxes_follow_the_week_start_and_rename_the_preset() {
         let form = blank();
         // none -> daily -> weekdays
