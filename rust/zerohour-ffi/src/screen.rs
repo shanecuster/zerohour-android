@@ -48,6 +48,8 @@ pub enum ColorSlot {
     Warn,
     /// Problems (overdue, high priority).
     Danger,
+    /// Calm information (low priority): each theme's blue.
+    Info,
 }
 
 /// Converts core's slot into the mirror. The names differ only where core
@@ -68,6 +70,7 @@ impl From<Slot> for ColorSlot {
             Slot::Ok => ColorSlot::Ok,
             Slot::Warn => ColorSlot::Warn,
             Slot::Danger => ColorSlot::Danger,
+            Slot::Info => ColorSlot::Info,
         }
     }
 }

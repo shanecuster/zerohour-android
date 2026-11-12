@@ -252,9 +252,10 @@ mod tests {
             .collect();
         assert_eq!(labels, vec!["High", "Medium", "Low"]);
         let slots: Vec<ColorSlot> = screen.by_priority.iter().map(|p| p.slot).collect();
+        // Core decides the colours: Low is the theme's blue (`Info`).
         assert_eq!(
             slots,
-            vec![ColorSlot::Danger, ColorSlot::Warn, ColorSlot::Muted]
+            vec![ColorSlot::Danger, ColorSlot::Warn, ColorSlot::Info]
         );
     }
 
