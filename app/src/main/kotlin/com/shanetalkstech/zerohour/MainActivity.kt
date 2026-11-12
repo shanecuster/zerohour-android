@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.shanetalkstech.zerohour.data.SyncRunner
 import com.shanetalkstech.zerohour.reminders.ReminderScheduler
 import com.shanetalkstech.zerohour.ui.MainRoute
 
@@ -25,8 +26,9 @@ class MainActivity : ComponentActivity() {
      * [savedInstanceState] holds state Android saved if the screen is being
      * recreated. Turning the phone does NOT recreate it (the manifest's
      * `configChanges` says the app handles that itself), but other changes,
-     * such as a new system language, still do. We do not need it directly,
-     * but we must pass it up to the parent class.
+     * such as a new system language, still do. It is null only the first
+     * time, which is how the launch sync below knows the app really opened
+     * (and was not just rebuilt), and we must pass it up to the parent class.
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +48,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             MainRoute()
         }
+
+        // "On launch" sync: only when the screen is created fresh, so a
+        // rebuild (a new system language) does not sync again. It runs in
+        // the background and checks everything itself (sync and "On launch"
+        // switched on, not the demo, no first-sync question, a saved
+        // password), so with "On launch" off (the default) nothing happens.
+        // It lives here, not in an Application class, because reminders and
+        // the boot broadcast also start the app's process, with no screen,
+        // and must never cause network traffic.
+        if (savedInstanceState == null) SyncRunner.startAtLaunch(this)
     }
 
     /**

@@ -247,11 +247,27 @@ fun MainRoute() {
     // row, and read everything again so pulled changes appear at once. It
     // runs each time the runner reports a new result.
     LaunchedEffect(syncState) {
-        val finished = syncState is SyncState.Done ||
-            syncState is SyncState.Offline ||
-            syncState is SyncState.Failed
-        if (finished) {
-            syncResults.firstOrNull()?.let { status = Status(it.text, it.slot) }
+        val state = syncState
+        // `when` with a type check (`is`) gives a value for each case: the
+        // sync's `atLaunch` flag, or null while nothing has finished.
+        val atLaunch = when (state) {
+            is SyncState.Done -> state.atLaunch
+            is SyncState.Offline -> state.atLaunch
+            is SyncState.Failed -> state.atLaunch
+            SyncState.Idle, SyncState.Running -> null
+        }
+        if (atLaunch != null) {
+            // The automatic sync at app start keeps the bottom row quiet: a
+            // failure shows only in the header indicator, and a success only
+            // speaks up for something to act on (items that need a newer
+            // zerohour, a clock that is off), never for the routine "Synced:
+            // N in, M out." (the one line in the ok colour).
+            val line = if (atLaunch) {
+                syncResults.firstOrNull()?.takeIf { state is SyncState.Done && it.slot != ColorSlot.OK }
+            } else {
+                syncResults.firstOrNull()
+            }
+            line?.let { status = Status(it.text, it.slot) }
             reloads++
         }
     }
