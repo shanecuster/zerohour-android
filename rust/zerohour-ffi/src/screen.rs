@@ -320,8 +320,23 @@ mod tests {
         assert_eq!(screen.events.len(), 5);
         assert!(screen.demo);
         assert_eq!(screen.today, "Thu Oct 22 2026");
-        // Sorted by core: a High task comes first.
-        assert_eq!(screen.tasks[0].priority_name, "High");
+        // Sorted by core, next due first: the one overdue sample task (the
+        // bill, due yesterday) is on top. Its being High priority is not
+        // what puts it there; its date is.
+        assert_eq!(screen.tasks[0].title, "Pay electricity bill");
+        // Undated tasks come last: the demo has one, and once a task has no
+        // date text, none after it has one either. (`expect` fails the test
+        // with that message if the demo ever loses its undated task.)
+        let first_undated = screen
+            .tasks
+            .iter()
+            .position(|t| t.date_text.is_empty())
+            .expect("the demo has an undated task");
+        assert!(
+            screen.tasks[first_undated..]
+                .iter()
+                .all(|t| t.date_text.is_empty())
+        );
         // The overdue sample task is drawn in the danger colour.
         let bill = screen
             .tasks
