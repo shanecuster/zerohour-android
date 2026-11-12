@@ -139,6 +139,10 @@ pub struct ThemePalette {
     pub warn: RgbColor,
     /// Problems: overdue, high priority, delete confirmations.
     pub danger: RgbColor,
+    /// Calm information: low priority (its marker, its name, and its line in
+    /// the Stats breakdown). Each theme's blue; Dracula, which has none, uses
+    /// its cyan.
+    pub info: RgbColor,
 }
 
 /// Converts one of core's `Theme`s into the mirror palette, slot by slot.
@@ -162,6 +166,7 @@ impl From<&Theme> for ThemePalette {
             ok: t.ok.into(),
             warn: t.warn.into(),
             danger: t.danger.into(),
+            info: t.info.into(),
         }
     }
 }
@@ -246,6 +251,21 @@ mod tests {
         let bg = &info.colors.background;
         let core_bg = THEMES[0].bg;
         assert_eq!((bg.r, bg.g, bg.b), (core_bg.0, core_bg.1, core_bg.2));
+    }
+
+    #[test]
+    fn every_palette_carries_cores_info_blue() {
+        // `zip` walks the two lists side by side: the converted themes and
+        // core's own, in the same order. Each pair must have the same blue.
+        for (listed, core) in list_themes().iter().zip(THEMES) {
+            let info = &listed.colors.info;
+            assert_eq!(
+                (info.r, info.g, info.b),
+                (core.info.0, core.info.1, core.info.2),
+                "{}",
+                core.name
+            );
+        }
     }
 
     #[test]

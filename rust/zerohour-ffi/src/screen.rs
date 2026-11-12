@@ -293,6 +293,26 @@ mod tests {
     }
 
     #[test]
+    fn task_rows_colour_each_priority_as_core_says() {
+        let screen = demo().main_screen(NOW.to_string(), true).unwrap();
+        // The demo has tasks of all three priorities; each row's marker and
+        // name use core's slot for its priority, so Low is the blue `Info`.
+        for (name, slot) in [
+            ("High", ColorSlot::Danger),
+            ("Medium", ColorSlot::Warn),
+            ("Low", ColorSlot::Info),
+        ] {
+            let rows: Vec<_> = screen
+                .tasks
+                .iter()
+                .filter(|t| t.priority_name == name)
+                .collect();
+            assert!(!rows.is_empty(), "the demo has no {name} task");
+            assert!(rows.iter().all(|t| t.priority_slot == slot), "{name}");
+        }
+    }
+
+    #[test]
     fn demo_screen_lists_core_sample_data() {
         let screen = demo().main_screen(NOW.to_string(), true).unwrap();
         // Core's demo: eight open tasks and five upcoming events.

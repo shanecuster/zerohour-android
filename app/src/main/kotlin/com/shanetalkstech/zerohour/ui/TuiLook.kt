@@ -137,6 +137,7 @@ fun ThemePalette.color(slot: ColorSlot): Color = when (slot) {
     ColorSlot.OK -> ok
     ColorSlot.WARN -> warn
     ColorSlot.DANGER -> danger
+    ColorSlot.INFO -> info
 }.toColor()
 
 /**
