@@ -1,0 +1,3 @@
+- Tasks are listed next due first: overdue tasks on top, then by date and time, then by priority. Tasks without a date come last.
+- Low priority is now blue, in the task list and in Stats.
+- New sync option, "On launch" (off by default): syncs once in the background when you open the app. If the server can't be reached, it stops quietly.
