@@ -78,6 +78,7 @@ private data class SyncMessage(val text: String, val slot: ColorSlot)
  * ```
  * ╭ Sync ────────────────────────────────╮
  * │   Sync       ‹ off ›                 │
+ * │   On launch  ‹ off ›                 │
  * │   Server URL https://...             │
  * │   Database   notes                   │
  * │   Username   someone                 │
@@ -113,6 +114,11 @@ private data class SyncMessage(val text: String, val slot: ColorSlot)
  *   phone that has never synced but has items asks first, as the header
  *   does. A tap while a sync runs says "Already syncing…".
  *
+ * - "On launch" (off by default, Android only) syncs once in the background
+ *   when the app opens, if sync is on, a password is saved and no
+ *   first-sync question is due (see `SyncRunner.startAtLaunch`). It is saved
+ *   with Save, like the switch above it.
+ *
  * While the demo database is in use, everything is greyed out (the demo
  * never syncs). [onClose] closes the page (the back gesture does too).
  */
@@ -130,6 +136,9 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
     // The form's fields. The password is only what is typed now; the saved
     // one is read when it is needed and never put into a field.
     var enabled by remember { mutableStateOf(false) }
+    // "On launch": kept apart from [config] because it is not one of core's
+    // sync details; the Rust side saves it under its own key.
+    var onLaunch by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
     var database by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
@@ -178,6 +187,7 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
             }
             if (!loaded) {
                 enabled = screen.config.enabled
+                onLaunch = screen.onLaunch
                 url = screen.config.url
                 database = screen.config.database
                 username = screen.config.username
@@ -235,7 +245,11 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
     // the typed password, under the account name of the details just saved.
     fun save() = runJob {
         val details = config()
-        DatabaseHolder.get(context).saveSyncSettings(details)
+        val db = DatabaseHolder.get(context)
+        db.saveSyncSettings(details)
+        // Only after the details were accepted: a refused address (not
+        // https) leaves "On launch" as it was too.
+        db.setSyncOnLaunch(onLaunch)
         if (typedPassword.isNotEmpty()) {
             PasswordStore.save(context, syncAccount(details), typedPassword)
             typedPassword = ""
@@ -288,22 +302,9 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
                 return@Column
             }
 
-            // The on/off switch, in the settings page's ‹ value › style.
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = look.cell.rows(LINE_ROWS)),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BasicText(
-                    text = "  " + stringResource(R.string.sync_enabled).padEnd(LABEL_CELLS) + " ",
-                    style = look.text.copy(color = muted),
-                )
-                TapText(look, "‹ ", accent, onClick = { enabled = !enabled }, largeTarget = true)
-                BasicText(
-                    text = stringResource(if (enabled) R.string.value_on else R.string.value_off),
-                    style = look.text.copy(color = foreground),
-                )
-                TapText(look, " › ", accent, onClick = { enabled = !enabled }, largeTarget = true)
-            }
+            // The two on/off switches, in the settings page's ‹ value › style.
+            OnOffRow(look, stringResource(R.string.sync_enabled), enabled) { enabled = !enabled }
+            OnOffRow(look, stringResource(R.string.sync_on_launch), onLaunch) { onLaunch = !onLaunch }
             SyncField(look, stringResource(R.string.sync_url), url, { url = it }, FieldKind.URL)
             SyncField(look, stringResource(R.string.sync_database), database, { database = it }, FieldKind.PLAIN)
             SyncField(look, stringResource(R.string.sync_username), username, { username = it }, FieldKind.PLAIN)
@@ -410,6 +411,31 @@ fun SyncPage(look: TuiLook, onClose: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * One on/off switch: "  Label      ‹ on ›". Tapping either arrow calls
+ * [onToggle]; the page changes the value, and Save stores it. Both arrows get
+ * a large tap area without moving their text.
+ */
+@Composable
+private fun OnOffRow(look: TuiLook, label: String, on: Boolean, onToggle: () -> Unit) {
+    val accent = look.color(ColorSlot.ACCENT)
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = look.cell.rows(LINE_ROWS)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicText(
+            text = "  " + label.padEnd(LABEL_CELLS) + " ",
+            style = look.text.copy(color = look.color(ColorSlot.MUTED)),
+        )
+        TapText(look, "‹ ", accent, onClick = onToggle, largeTarget = true)
+        BasicText(
+            text = stringResource(if (on) R.string.value_on else R.string.value_off),
+            style = look.text.copy(color = look.color(ColorSlot.FOREGROUND)),
+        )
+        TapText(look, " › ", accent, onClick = onToggle, largeTarget = true)
     }
 }
 

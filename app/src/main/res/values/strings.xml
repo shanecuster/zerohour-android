@@ -147,6 +147,8 @@
          characters. The texts follow the terminal app's sync popup. -->
     <string name="sync_title">Sync</string>
     <string name="sync_enabled">Sync</string>
+    <!-- Sync once when the app opens (off by default). -->
+    <string name="sync_on_launch">On launch</string>
     <string name="sync_url">Server URL</string>
     <string name="sync_database">Database</string>
     <string name="sync_username">Username</string>
