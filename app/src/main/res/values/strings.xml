@@ -272,7 +272,7 @@
     <string name="lic_font_awesome" translatable="false">Font Awesome 6.5.1 icons</string>
     <string name="lic_font_awesome_attribution">Font Awesome by Fonticons, Inc. (fontawesome.com), licensed under CC BY 4.0. Shown through the Nerd Font, which resized the icons to one character cell.</string>
     <string name="lic_sqlite" translatable="false">SQLite 3.53.2</string>
-    <string name="lic_android" translatable="false">AndroidX and Jetpack Compose, Kotlin, kotlinx.coroutines, Guava listenablefuture, JSpecify, JetBrains annotations</string>
+    <string name="lic_android" translatable="false">AndroidX and Jetpack Compose, Kotlin, kotlinx.coroutines, kotlinx.serialization, Guava listenablefuture, JSpecify, JetBrains annotations</string>
     <string name="lic_jna" translatable="false">JNA 5.17.0</string>
     <string name="lic_rust_apache" translatable="false">Rust crates: android_system_properties, anyhow, base64, bitflags, camino, cargo-platform, cfg-if, chrono, directories, dirs-sys, equivalent, errno, fallible-iterator, fallible-streaming-iterator, fastrand, getrandom, hashbrown, hashlink, heck, http, httparse, iana-time-zone, indexmap, itoa, libc, linux-raw-sys, log, num-traits, once_cell, percent-encoding, rustix, rustls-pki-types, semver, serde, serde_core, serde_json, smallvec, static_assertions, tempfile, thiserror, ureq, ureq-proto, utf8-zero, uuid, zeroize</string>
     <string name="lic_mit_others" translatable="false">bytes, rusqlite, libsqlite3-sys, cargo_metadata, zmij, memchr; libffi (inside JNA)</string>

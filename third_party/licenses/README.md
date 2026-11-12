@@ -36,9 +36,10 @@ proc-macros are left out):
     cargo tree -p zerohour-ffi -e normal,no-proc-macro --target aarch64-linux-android --prefix none
 
 and the Android libraries in `./gradlew :app:dependencies --configuration
-releaseRuntimeClasspath` (AndroidX, Kotlin, kotlinx.coroutines, Guava's
-listenablefuture, JSpecify and JetBrains annotations, all Apache-2.0; JNA,
-Apache-2.0 chosen from "Apache-2.0 OR LGPL-2.1-or-later").
+releaseRuntimeClasspath` (AndroidX, Kotlin, kotlinx.coroutines,
+kotlinx.serialization, Guava's listenablefuture, JSpecify and JetBrains
+annotations, all Apache-2.0; JNA, Apache-2.0 chosen from "Apache-2.0 OR
+LGPL-2.1-or-later").
 
 When a dependency or core's pin changes, run both again and update the list in
 `ui/LicensesPage.kt`, its names in `res/values/strings.xml`, and these files.
