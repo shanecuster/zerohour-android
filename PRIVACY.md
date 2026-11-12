@@ -28,8 +28,12 @@ The app asks for these permissions:
 
 The app contacts only one place, and only if you turn sync on:
 
-**Your own sync server, only if you turn sync on.** Sync is off by default and
-runs only when you tap **sync now**. When used, it copies your tasks, events,
+**Your own sync server, only if you turn sync on.** Sync is off by default.
+When it is on, it runs when you tap **sync now** and, only if you also switch
+on **On launch** on the Sync page (off by default), once in the background each
+time you open the app. If the server cannot be reached, that sync simply stops
+without retrying. The app never syncs on a timer or while it is closed. When
+used, it copies your tasks, events,
 notes and completion history to the CouchDB server whose address, database name,
 username and password you entered. The developer has no access to it. The
 address must use `https://`; plain `http://` is not allowed. The server's
