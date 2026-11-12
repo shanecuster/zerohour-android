@@ -24,18 +24,30 @@
 //! list, through `rustls`), not the phone's: servers with self-signed or
 //! private-CA certificates are not supported.
 //!
-//! Syncing is only ever started by the user ("Sync now"): there is no
-//! automatic or background sync.
+//! A sync is started by the user ("Sync now"), or once when the app opens if
+//! the user switched on "On launch" (off by default, an Android-only setting:
+//! see [`SYNC_ON_LAUNCH_KEY`]). There is no timer and no sync while the app
+//! is closed.
 
 use std::sync::atomic::Ordering;
 
 use chrono::{DateTime, Local, NaiveDate, TimeZone, Utc};
 use zerohour_core::clock::{TimeFormat as CoreTimeFormat, format_time, format_time_short};
+use zerohour_core::db::Db;
 use zerohour_core::icons::Icon;
 use zerohour_core::sync::{self, SyncError, SyncSettings};
 
 use crate::database::{Database, StoredSettings, parse_now};
 use crate::error::FfiError;
+
+/// The settings key for "sync once when the app opens" ("true" or "false";
+/// missing means off).
+///
+/// Android-only: the terminal app always syncs at start when sync is on and
+/// never reads this key. It lives in the database's `settings` table, which
+/// is never synced, so it belongs to this phone alone. Deliberately not named
+/// `sync.…`, so it can never be mistaken for one of core's own sync keys.
+pub const SYNC_ON_LAUNCH_KEY: &str = "android.sync_on_launch";
 
 /// The sync details the user types in (everything except the password).
 /// Mirror of core's `SyncSettings`.
@@ -87,6 +99,9 @@ pub struct SyncScreen {
     pub synced_docs: u64,
     /// True for the demo database, which never syncs (the screen greys out).
     pub demo: bool,
+    /// "On launch": sync once in the background when the app opens. Off by
+    /// default.
+    pub on_launch: bool,
 }
 
 /// The answer to "Test connection".
@@ -121,6 +136,10 @@ pub struct SyncStatus {
     /// first sync adds them to the server's, and anything typed on both
     /// devices will appear twice, so the app asks first.
     pub first_sync_warning: bool,
+    /// "On launch" is switched on (see [`SYNC_ON_LAUNCH_KEY`]). Kotlin syncs
+    /// at launch only when this, [`Self::enabled`] and "no first-sync
+    /// warning" all hold: the first sync always asks first.
+    pub on_launch: bool,
     /// The header indicator's icons in the chosen icon mode, from core's
     /// icon table: never synced or syncing ("⇅" in Unicode mode), synced,
     /// offline ("○") and error ("✗").
@@ -220,6 +239,12 @@ impl Drop for SyncingGuard<'_> {
     }
 }
 
+/// Reads "On launch" from the settings: only the text "true" counts as on,
+/// so a missing or damaged value means off.
+fn load_on_launch(db: &Db) -> Result<bool, FfiError> {
+    Ok(db.get_setting(SYNC_ON_LAUNCH_KEY)?.as_deref() == Some("true"))
+}
+
 /// The error for anything tried on the demo database.
 fn demo_refused() -> FfiError {
     FfiError::Sync {
@@ -266,7 +291,20 @@ impl Database {
             config: SyncSettings::load(&db)?.into(),
             synced_docs: db.synced_doc_count()?,
             demo: self.is_demo(),
+            on_launch: load_on_launch(&db)?,
         })
+    }
+
+    /// Saves "On launch" (sync once when the app opens). Refused on the demo,
+    /// which never syncs. Kotlin saves it together with the other details
+    /// when Save is tapped.
+    pub fn set_sync_on_launch(&self, on: bool) -> Result<(), FfiError> {
+        if self.is_demo() {
+            return Err(demo_refused());
+        }
+        let value = if on { "true" } else { "false" };
+        self.lock()?.set_setting(SYNC_ON_LAUNCH_KEY, value)?;
+        Ok(())
     }
 
     /// Saves the sync details (not the password; Kotlin keeps that).
@@ -347,6 +385,7 @@ impl Database {
             synced_docs: db.synced_doc_count()?,
             local_items,
             first_sync_warning: last.is_none() && local_items > 0,
+            on_launch: load_on_launch(&db)?,
             icons: SyncIcons {
                 sync: Icon::Sync.get(mode).to_string(),
                 synced: Icon::Synced.get(mode).to_string(),
@@ -575,6 +614,43 @@ mod tests {
             sync_detail(db.reset_sync_state()),
             "the demo database never syncs"
         );
+        assert_eq!(
+            sync_detail(db.set_sync_on_launch(true)),
+            "the demo database never syncs"
+        );
+    }
+
+    #[test]
+    fn on_launch_is_off_by_default_and_saved_on_its_own() {
+        let (db, path) = empty("on-launch");
+        // A fresh database: off, on the page and in the status.
+        assert!(!db.sync_screen().unwrap().on_launch);
+        assert!(!db.sync_status(NOW.into()).unwrap().on_launch);
+        // Switched on, both read it back.
+        db.set_sync_on_launch(true).unwrap();
+        assert!(db.sync_screen().unwrap().on_launch);
+        assert!(db.sync_status(NOW.into()).unwrap().on_launch);
+        // Saving the server details does not touch it (it is not part of
+        // core's `SyncSettings`), and neither does "Reset sync state".
+        db.save_sync_settings(config("https://couch.example.invalid"))
+            .unwrap();
+        db.reset_sync_state().unwrap();
+        assert!(db.sync_screen().unwrap().on_launch);
+        // Switched off again.
+        db.set_sync_on_launch(false).unwrap();
+        assert!(!db.sync_screen().unwrap().on_launch);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_damaged_on_launch_value_counts_as_off() {
+        let (db, path) = empty("on-launch-damaged");
+        db.lock()
+            .unwrap()
+            .set_setting(SYNC_ON_LAUNCH_KEY, "yes please")
+            .unwrap();
+        assert!(!db.sync_screen().unwrap().on_launch);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
