@@ -19,7 +19,7 @@ use zerohour_core::model::{Item, Kind};
 
 use crate::database::{Database, StoredSettings, parse_now};
 use crate::error::FfiError;
-use crate::form::{FormSession, ItemForm, WeekStart};
+use crate::form::{CalendarTarget, FormSession, ItemForm, WeekStart};
 
 /// What happened when the user tapped Save.
 ///
@@ -81,6 +81,7 @@ impl Database {
             time_format: StoredSettings::load(&db)?.time_format,
             week_start: load_week_start(&db)?,
             calendar_month: None,
+            calendar_target: CalendarTarget::default(),
         })))
     }
 
@@ -103,6 +104,7 @@ impl Database {
             time_format,
             week_start: load_week_start(&db)?,
             calendar_month: None,
+            calendar_target: CalendarTarget::default(),
         })))
     }
 

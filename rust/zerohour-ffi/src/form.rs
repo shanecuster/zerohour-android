@@ -237,6 +237,10 @@ pub struct CalendarDay {
     pub bold: bool,
     /// Underlined: today.
     pub underline: bool,
+    /// True for a day that can't be picked: before the start, while the
+    /// calendar fills "Ends on" / "Until". Drawn crossed out; a tap on it is
+    /// refused (see [`CalendarView::note`]).
+    pub disabled: bool,
 }
 
 /// The calendar picker, while it is open.
@@ -250,6 +254,9 @@ pub struct CalendarView {
     pub week_start: WeekStart,
     /// Six weeks of seven days (always 6, so the box never changes size).
     pub weeks: Vec<Vec<CalendarDay>>,
+    /// Right after a tap on a crossed-out day: why nothing was picked, "not
+    /// before the start (Dec 01)", in the danger colour. `None` otherwise.
+    pub note: Option<TextLabel>,
 }
 
 /// Everything the form screen draws.
@@ -280,6 +287,35 @@ pub(crate) struct FormSession {
     /// While the calendar is open: a date in the month it shows. `None` when
     /// it is closed.
     pub calendar_month: Option<NaiveDate>,
+    /// Which row the open calendar fills, and its limits (see [`CalendarTarget`]).
+    pub calendar_target: CalendarTarget,
+}
+
+/// Which row the calendar fills, set each time it opens.
+///
+/// The date row picks any day. "Ends on" / "Until" can't end before the start,
+/// so it has an earliest day: earlier days are crossed out and refused, as in
+/// the terminal app's picker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CalendarTarget {
+    /// [`Field::Date`] or [`Field::EndDate`].
+    pub field: Field,
+    /// The first day that may be picked, if any (the start, for the end date).
+    pub earliest: Option<NaiveDate>,
+    /// True right after a tap on a day before `earliest`, so the calendar can
+    /// say why nothing happened. Cleared by the next calendar action.
+    pub refused: bool,
+}
+
+impl Default for CalendarTarget {
+    /// The date row, with no limit: what the calendar was before end dates.
+    fn default() -> CalendarTarget {
+        CalendarTarget {
+            field: Field::Date,
+            earliest: None,
+            refused: false,
+        }
+    }
 }
 
 /// An open add or edit form.
@@ -384,12 +420,36 @@ impl ItemForm {
         let mut s = self.lock()?;
         let typed = parse_date_input(&s.input.date_text, today).ok().flatten();
         s.calendar_month = Some(typed.unwrap_or(today));
+        s.calendar_target = CalendarTarget::default();
+        Ok(())
+    }
+
+    /// Opens the calendar for "Ends on" / "Until": on the month of the end
+    /// date typed so far, or of the start when it's empty. Days before the
+    /// start are crossed out and can't be picked. Without a start yet (a task
+    /// with no due date) it opens on today with no limit; saving then says
+    /// the end needs a due date.
+    pub fn open_end_calendar(&self, now: String) -> Result<(), FfiError> {
+        let today = parse_now(&now)?.local.date();
+        let mut s = self.lock()?;
+        // Core's own reading of the form: the start as saving would store it,
+        // and the end counted from it ("12/24", "+23").
+        let start = s.input.start_date(today);
+        let end = start.and_then(|start| s.input.end_date(start).ok().flatten());
+        s.calendar_month = Some(end.or(start).unwrap_or(today));
+        s.calendar_target = CalendarTarget {
+            field: Field::EndDate,
+            earliest: start,
+            refused: false,
+        };
         Ok(())
     }
 
     /// Closes the calendar without changing the date.
     pub fn close_calendar(&self) -> Result<(), FfiError> {
-        self.lock()?.calendar_month = None;
+        let mut s = self.lock()?;
+        s.calendar_month = None;
+        s.calendar_target.refused = false;
         Ok(())
     }
 
@@ -401,6 +461,7 @@ impl ItemForm {
         if let Some(month) = &mut s.calendar_month {
             *month = add_months(*month, months);
         }
+        s.calendar_target.refused = false;
         Ok(())
     }
 
@@ -423,13 +484,26 @@ impl ItemForm {
         Ok(s.week_start.into())
     }
 
-    /// A tap on a day: puts that date in the field (in ISO form, as core
-    /// writes picked dates) and closes the calendar.
+    /// A tap on a day: puts that date in the row the calendar was opened for
+    /// (in ISO form, as core writes picked dates) and closes the calendar. A
+    /// day before the earliest one (crossed out) is refused: the calendar
+    /// stays open and says why.
     pub fn pick_date(&self, iso: String) -> Result<(), FfiError> {
         let date = parse_iso(&iso)?;
         let mut s = self.lock()?;
-        s.input.set_date(date);
+        let target = s.calendar_target;
+        // `is_some_and`: only when there is an earliest day and this is before it.
+        if target.earliest.is_some_and(|first| date < first) {
+            s.calendar_target.refused = true;
+            return Ok(());
+        }
+        if target.field == Field::EndDate {
+            s.input.set_end_date(date);
+        } else {
+            s.input.set_date(date);
+        }
         s.calendar_month = None;
+        s.calendar_target.refused = false;
         Ok(())
     }
 
@@ -446,7 +520,9 @@ impl ItemForm {
             .into_iter()
             .map(|field| FieldRow {
                 field: field.into(),
-                label: field.label(kind).to_string(),
+                // `input.label`: like the field's own label, except that an
+                // event's date reads "Starts" once it has an end date.
+                label: input.label(field).to_string(),
                 // Text and choice fields show core's text for the value. The
                 // two kinds of checkbox are drawn from `days` and `checked`
                 // instead, so their value stays empty.
@@ -466,10 +542,18 @@ impl ItemForm {
             })
             .collect();
 
-        // The calendar, if open. The date already in the field is marked.
+        // The calendar, if open. The date already in its row is marked: the
+        // end date (counted from the start) or the date.
+        let target = s.calendar_target;
         let calendar = s.calendar_month.map(|month| {
-            let current = parse_date_input(&input.date_text, today).ok().flatten();
-            calendar_view(month, s.week_start, today, current)
+            let current = if target.field == Field::EndDate {
+                target
+                    .earliest
+                    .and_then(|start| input.end_date(start).ok().flatten())
+            } else {
+                parse_date_input(&input.date_text, today).ok().flatten()
+            };
+            calendar_view(month, s.week_start, today, current, target)
         });
 
         Ok(FormView {
@@ -507,11 +591,16 @@ fn preview((text, slot): (String, Slot)) -> TextLabel {
 /// The month grid for the month containing `month`, with each day styled the
 /// way the terminal app's calendar styles it (`tui/src/ui/calendar.rs`),
 /// minus the keyboard cursor (on a phone you tap the day you want).
+///
+/// `target` adds the end date's limit: days before its earliest day are
+/// muted and `disabled` (crossed out), and after a refused tap, `note` says
+/// why.
 fn calendar_view(
     month: NaiveDate,
     week_start: CoreWeekStart,
     today: NaiveDate,
     current: Option<NaiveDate>,
+    target: CalendarTarget,
 ) -> CalendarView {
     let weeks = month_grid(month, week_start)
         .iter()
@@ -531,12 +620,19 @@ fn calendar_view(
                     if date == today {
                         slot = Slot::Accent;
                     }
+                    // Before the start, for an end date: muted whatever else
+                    // applies, and crossed out by Kotlin.
+                    let disabled = target.earliest.is_some_and(|first| date < first);
+                    if disabled {
+                        slot = Slot::Muted;
+                    }
                     CalendarDay {
                         iso: date.format("%Y-%m-%d").to_string(),
                         day: date.day(),
                         slot: slot.into(),
                         bold: is_current,
                         underline: date == today,
+                        disabled,
                     }
                 })
                 .collect()
@@ -551,6 +647,15 @@ fn calendar_view(
             .collect(),
         week_start: week_start.into(),
         weeks,
+        // The same words as the terminal app's picker.
+        note: match (target.refused, target.earliest) {
+            (true, Some(first)) => Some(TextLabel {
+                text: format!("not before the start ({})", first.format("%b %d")),
+                slot: ColorSlot::Danger,
+                bold: false,
+            }),
+            _ => None,
+        },
     }
 }
 
@@ -568,6 +673,7 @@ mod tests {
             time_format: TimeFormat::Hour12,
             week_start: CoreWeekStart::Sunday,
             calendar_month: None,
+            calendar_target: CalendarTarget::default(),
         })
     }
 
@@ -757,6 +863,99 @@ mod tests {
         assert!(view.calendar.is_none());
         assert_eq!(row(&form, FormField::Date).value, "2026-10-30");
         assert!(form.pick_date("30/10/2026".into()).is_err());
+    }
+
+    /// An event form for a yearly event starting Dec 1 2026.
+    fn advent() -> ItemForm {
+        let form = blank();
+        form.set_kind(ItemKind::Event).unwrap();
+        form.set_text(FormField::Title, "Advent of Cyber".into())
+            .unwrap();
+        form.set_text(FormField::Date, "2026-12-01".into()).unwrap();
+        form.lock()
+            .unwrap()
+            .input
+            .set_repeat(zerohour_core::form::RepeatChoice::Yearly);
+        form
+    }
+
+    /// One day of the open calendar.
+    fn day(form: &ItemForm, iso: &str) -> CalendarDay {
+        form.view(NOW.into())
+            .unwrap()
+            .calendar
+            .unwrap()
+            .weeks
+            .into_iter()
+            .flatten()
+            .find(|d| d.iso == iso)
+            .unwrap()
+    }
+
+    #[test]
+    fn the_end_row_takes_typing_and_the_date_reads_starts() {
+        let form = advent();
+        assert!(fields(&form).contains(&FormField::EndDate));
+        assert_eq!(row(&form, FormField::EndDate).label, "Ends on");
+        assert_eq!(row(&form, FormField::Date).label, "Date");
+        form.set_text(FormField::EndDate, "12/24".into()).unwrap();
+        assert_eq!(row(&form, FormField::Date).label, "Starts");
+        let preview = row(&form, FormField::EndDate).preview.unwrap();
+        assert!(
+            preview.text.contains("a reminder each day (24)"),
+            "{}",
+            preview.text
+        );
+        assert_eq!(preview.slot, ColorSlot::Ok);
+        // Core's message for an end before the start.
+        form.set_text(FormField::EndDate, "2026-11-30".into())
+            .unwrap();
+        let message = form
+            .lock()
+            .unwrap()
+            .input
+            .validate(NaiveDate::from_ymd_opt(2026, 10, 22).unwrap());
+        assert_eq!(
+            message.unwrap_err(),
+            "\"Ends on\" can't be before the start (Tue Dec 01 2026)."
+        );
+    }
+
+    #[test]
+    fn the_end_calendar_opens_at_the_start_and_refuses_earlier_days() {
+        let form = advent();
+        form.open_end_calendar(NOW.into()).unwrap();
+        let cal = form.view(NOW.into()).unwrap().calendar.unwrap();
+        assert_eq!(cal.title, "December 2026", "empty: the start's month");
+        assert_eq!(cal.note, None);
+        // Nov 30 (shown in the first week) is crossed out; Dec 1 isn't.
+        assert!(day(&form, "2026-11-30").disabled);
+        assert_eq!(day(&form, "2026-11-30").slot, ColorSlot::Muted);
+        assert!(!day(&form, "2026-12-01").disabled);
+        // A tap on it is refused: still open, with the note, and nothing typed.
+        form.pick_date("2026-11-30".into()).unwrap();
+        let view = form.view(NOW.into()).unwrap();
+        let note = view.calendar.unwrap().note.unwrap();
+        assert_eq!(note.text, "not before the start (Dec 01)");
+        assert_eq!(note.slot, ColorSlot::Danger);
+        assert_eq!(row(&form, FormField::EndDate).value, "");
+        // Moving the month clears the note.
+        form.shift_calendar(1).unwrap();
+        form.shift_calendar(-1).unwrap();
+        assert_eq!(form.view(NOW.into()).unwrap().calendar.unwrap().note, None);
+        // Dec 24 goes into "Ends on", not into the date.
+        form.pick_date("2026-12-24".into()).unwrap();
+        assert!(form.view(NOW.into()).unwrap().calendar.is_none());
+        assert_eq!(row(&form, FormField::EndDate).value, "2026-12-24");
+        assert_eq!(row(&form, FormField::Date).value, "2026-12-01");
+        // Reopened: on the end date's month, with Dec 24 marked.
+        form.open_end_calendar(NOW.into()).unwrap();
+        assert!(day(&form, "2026-12-24").bold);
+        // The date's own calendar has no limit.
+        form.open_calendar(NOW.into()).unwrap();
+        assert!(!day(&form, "2026-11-30").disabled);
+        form.pick_date("2026-11-30".into()).unwrap();
+        assert_eq!(row(&form, FormField::Date).value, "2026-11-30");
     }
 
     #[test]
