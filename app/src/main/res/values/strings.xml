@@ -106,6 +106,16 @@
     <string name="status_event_not_done">Events count down on their own; there\'s nothing to complete.</string>
     <string name="status_deleted">Deleted \"%1$s\"</string>
     <!--
+      Undo, offered after a Done or a delete: the tappable word at the end of
+      the bottom row for a few seconds, then what tapping it did (the
+      terminal app's words for its u key). %1$s is the item's title.
+    -->
+    <string name="undo_button">[ undo ]</string>
+    <string name="status_reopened">Reopened \"%1$s\"</string>
+    <string name="status_restored">Restored \"%1$s\"</string>
+    <string name="undo_already_synced">Already synced: can\'t undo</string>
+    <string name="undo_changed_since">Changed since: nothing to undo</string>
+    <!--
       The gesture hint, shown in the status message's place while there is no
       message (like the terminal app's key-hint footer). Each "key" is drawn
       in the accent colour, its word muted.

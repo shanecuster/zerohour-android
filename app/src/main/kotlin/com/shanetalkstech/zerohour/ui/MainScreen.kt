@@ -2,6 +2,7 @@ package com.shanetalkstech.zerohour.ui
 
 import android.content.Context
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -15,9 +16,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,6 +38,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -64,6 +70,7 @@ import uniffi.zerohour_ffi.ItemKind
 import uniffi.zerohour_ffi.MainScreen
 import uniffi.zerohour_ffi.StatsScreen
 import uniffi.zerohour_ffi.SyncStatus
+import uniffi.zerohour_ffi.UndoOutcome
 
 /**
  * Below this many columns the screen uses the short texts and drops the
@@ -71,6 +78,12 @@ import uniffi.zerohour_ffi.SyncStatus
  * held upright (about 40 to 45 columns) is always narrow.
  */
 private const val NARROW_COLUMNS = 60
+
+/**
+ * How long `[ undo ]` stays in the bottom row after a Done or a delete, in
+ * milliseconds. Afterwards the message stays, without it.
+ */
+private const val UNDO_MILLIS = 6_000L
 
 /** From this many columns up, the date column is shown (as in the terminal app). */
 private const val DATE_COLUMNS = 90
@@ -117,8 +130,36 @@ private sealed interface LoadState {
  * colour slot it is drawn in: "ok" by default, danger for errors (as in the
  * terminal app), warn for a sync that could not reach the server, muted for
  * "Already syncing…".
+ *
+ * [undo] is set after a Done or a delete: the row then ends in a tappable
+ * `[ undo ]` that takes the change back. It goes after [UNDO_MILLIS], when
+ * another message replaces this one, when a sync starts, or when the app
+ * goes to the background ([withoutUndo] keeps the message without it).
  */
-private data class Status(val text: String, val slot: ColorSlot = ColorSlot.OK)
+private data class Status(val text: String, val slot: ColorSlot = ColorSlot.OK, val undo: UndoOffer? = null) {
+    /** The same message, no longer offering undo. */
+    fun withoutUndo(): Status = copy(undo = null)
+}
+
+/**
+ * What `[ undo ]` would take back: the item's [id] and its [title] (for the
+ * "Reopened" or "Restored" message). A `sealed interface` is a closed list
+ * of types, so a `when` over it must handle each one, like an enum whose
+ * cases carry their own values.
+ */
+private sealed interface UndoOffer {
+    /** The item's ID. */
+    val id: String
+
+    /** The item's title as typed. */
+    val title: String
+
+    /** A task swiped done (and, if it repeats, given its next instance). */
+    data class Complete(override val id: String, override val title: String) : UndoOffer
+
+    /** An item deleted from the delete box. */
+    data class Delete(override val id: String, override val title: String) : UndoOffer
+}
 
 /**
  * The add/edit form while it is open: the Rust-side [form] object, whether it
@@ -218,12 +259,12 @@ fun MainRoute() {
     val scope = rememberCoroutineScope()
 
     // Runs [action] against the database on a background thread, then shows
-    // the status text it returns (if any) and reloads the screen. A failure
+    // the status it returns (if any) and reloads the screen. A failure
     // shows Rust's explanation instead, in the danger colour.
-    fun runChange(action: (Database) -> String?) {
+    fun runChange(action: (Database) -> Status?) {
         scope.launch {
             status = try {
-                withContext(Dispatchers.IO) { action(DatabaseHolder.get(context)) }?.let { Status(it) }
+                withContext(Dispatchers.IO) { action(DatabaseHolder.get(context)) }
             } catch (e: FfiException) {
                 Status(e.explanation(), ColorSlot.DANGER)
             }
@@ -235,14 +276,67 @@ fun MainRoute() {
     }
 
     // A line was swiped right: complete it, and say so the way the terminal
-    // app does (or that events can't be completed).
+    // app does, offering undo (or say that events can't be completed).
     fun complete(id: String) = runChange { db ->
         when (val outcome = db.completeTask(id, nowText())) {
-            CompleteOutcome.NotATask -> resources.getString(R.string.status_event_not_done)
-            is CompleteOutcome.Done -> outcome.nextDue?.let {
-                resources.getString(R.string.status_done_next, outcome.title, it)
-            } ?: resources.getString(R.string.status_done, outcome.title)
+            CompleteOutcome.NotATask -> Status(resources.getString(R.string.status_event_not_done))
+            is CompleteOutcome.Done -> {
+                val text = outcome.nextDue?.let {
+                    resources.getString(R.string.status_done_next, outcome.title, it)
+                } ?: resources.getString(R.string.status_done, outcome.title)
+                Status(text, undo = UndoOffer.Complete(id, outcome.title))
+            }
         }
+    }
+
+    // `[ undo ]` was tapped: ask core to take the change back. Only
+    // "Undone" changed anything; core refuses once the change has synced
+    // (the next sync would bring it straight back), and says so muted.
+    // `runChange` reloads the screen and re-plans the reminders, so a
+    // reopened task gets its alarms back.
+    fun undo(offer: UndoOffer) = runChange { db ->
+        val outcome = when (offer) {
+            is UndoOffer.Complete -> db.undoComplete(offer.id, nowText())
+            is UndoOffer.Delete -> db.undoDelete(offer.id, nowText())
+        }
+        when (outcome) {
+            UndoOutcome.UNDONE -> {
+                val done = if (offer is UndoOffer.Complete) R.string.status_reopened else R.string.status_restored
+                Status(resources.getString(done, offer.title))
+            }
+            UndoOutcome.ALREADY_SYNCED -> Status(resources.getString(R.string.undo_already_synced), ColorSlot.MUTED)
+            // NotFound cannot happen from here (the offer is for an item
+            // this screen just changed); it reads like "changed since".
+            UndoOutcome.CHANGED_SINCE, UndoOutcome.NOT_FOUND ->
+                Status(resources.getString(R.string.undo_changed_since), ColorSlot.MUTED)
+        }
+    }
+
+    // The 6-second limit on `[ undo ]`. `LaunchedEffect(offer)` starts the
+    // block each time a new offer appears, and cancels a running one when
+    // the offer changes or goes, so only the newest offer's timer counts.
+    // When it runs out, the message stays, without `[ undo ]`.
+    val offer = status?.undo
+    LaunchedEffect(offer) {
+        if (offer == null) return@LaunchedEffect
+        delay(UNDO_MILLIS)
+        status = status?.withoutUndo()
+    }
+
+    // The app going to the background ends the offer too: whoever comes
+    // back later should not find a stale `[ undo ]`. An observer on the
+    // activity's lifecycle hears "stopped" (no longer visible). A
+    // `DisposableEffect` adds it when the screen appears and removes it
+    // in `onDispose` when the screen goes, so it never outlives the screen.
+    // The activity is a `LifecycleOwner`; `as?` is a cast that gives null
+    // instead of failing, so a missing activity simply skips this.
+    val lifecycle = (LocalActivity.current as? LifecycleOwner)?.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) status = status?.withoutUndo()
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
     }
 
     // Opens a form made by [make] (a new one, or one filled in from an item).
@@ -272,6 +366,9 @@ fun MainRoute() {
         val state = syncState
         // Any state but "running" ends the pull's "syncing…" line.
         if (state != SyncState.Running) pullHeld = false
+        // A sync starting (from any tap, a pull, or the launch sync) ends
+        // the undo offer: what it pushes can no longer be taken back.
+        if (state == SyncState.Running) status = status?.withoutUndo()
         // `when` with a type check (`is`) gives a value for each case: the
         // sync's `atLaunch` flag, or null while nothing has finished.
         val atLaunch = when (state) {
@@ -446,6 +543,11 @@ fun MainRoute() {
                         rows = rows,
                         narrow = narrow,
                         status = status,
+                        onUndo = { offered ->
+                            // The offer is used up by the tap.
+                            status = null
+                            undo(offered)
+                        },
                         tab = tab,
                         onSelectTab = { tab = it },
                         onOpenSettings = {
@@ -516,7 +618,10 @@ fun MainRoute() {
                                     pendingDelete = null
                                     runChange { db ->
                                         db.deleteItem(pending.id, nowText())
-                                        resources.getString(R.string.status_deleted, pending.title)
+                                        Status(
+                                            resources.getString(R.string.status_deleted, pending.title),
+                                            undo = UndoOffer.Delete(pending.id, pending.title),
+                                        )
                                     }
                                 },
                                 onKeep = { pendingDelete = null },
@@ -612,7 +717,9 @@ private fun millisUntilNextMinute(): Long {
  *
  * [stats] is what the Stats tab shows. [columns] and [rows] are how many
  * character cells fit on the screen. [status] is the message for the bottom row, if any; without one, the row
- * shows the gesture hint ("→ done  ← delete  tap edit"). [tab] is the tab on
+ * shows the gesture hint ("→ done  ← delete  tap edit"). When the status
+ * offers undo, the row ends in `[ undo ]`, and tapping it runs [onUndo]
+ * with the offer. [tab] is the tab on
  * show, and [onSelectTab] runs when another one is tapped. [onOpenSettings]
  * runs when the gear in the header is tapped. [syncLine] is the header's
  * sync indicator (null: none), and [onSync] runs when it is tapped. [onAdd] runs when
@@ -630,6 +737,7 @@ private fun MainScreenContent(
     rows: Int,
     narrow: Boolean,
     status: Status?,
+    onUndo: (UndoOffer) -> Unit,
     tab: Tab,
     onSelectTab: (Tab) -> Unit,
     onOpenSettings: () -> Unit,
@@ -714,6 +822,9 @@ private fun MainScreenContent(
                         SpanStyle(color = look.color(it.slot)),
                     )
                 } ?: gestureHint(look),
+                // `[ undo ]` while the status offers it. `let` runs the block
+                // only when there is an offer, giving the tap's callback.
+                onUndo = status?.undo?.let { offered -> { onUndo(offered) } },
                 onAdd = onAdd,
                 // Drawn on top of its neighbours, so its enlarged "+ add" tap
                 // area wins where it reaches over the box's bottom line above
@@ -833,11 +944,18 @@ private fun gestureHint(look: TuiLook): AnnotatedString {
  * The bottom row of the main screen: [message] on the left (it ends in "…"
  * if it is too long), and the tappable "+ add" on the right, which runs
  * [onAdd]. Both sit one column in from the edges, where the terminal app's
- * frame shows them in its bottom border. [modifier] is for the caller's
- * drawing order.
+ * frame shows them in its bottom border. When [onUndo] is set, a tappable
+ * `[ undo ]` sits between them; it is never cut, so a long title shortens
+ * the message instead. [modifier] is for the caller's drawing order.
  */
 @Composable
-private fun FooterRow(look: TuiLook, message: AnnotatedString, onAdd: () -> Unit, modifier: Modifier = Modifier) {
+private fun FooterRow(
+    look: TuiLook,
+    message: AnnotatedString,
+    onUndo: (() -> Unit)?,
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -855,6 +973,18 @@ private fun FooterRow(look: TuiLook, message: AnnotatedString, onAdd: () -> Unit
                 .weight(1f)
                 .padding(end = look.cell.columns(1)),
         )
+        // `[ undo ]`, in the accent colour like "+ add", with the same
+        // enlarged tap area, and one blank column before "+ add".
+        if (onUndo != null) {
+            LargeTapArea(onClick = onUndo) {
+                BasicText(
+                    text = stringResource(R.string.undo_button),
+                    style = look.text.copy(color = look.color(ColorSlot.ACCENT), fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.width(look.cell.columns(1)))
+        }
         // One text row is too short for a finger: the tap area is made at
         // least 48dp each way, the text stays where it is.
         LargeTapArea(onClick = onAdd) {
