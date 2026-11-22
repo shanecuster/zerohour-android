@@ -13,12 +13,21 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.shanetalkstech.zerohour.R
+import com.shanetalkstech.zerohour.data.nowText
 import uniffi.zerohour_ffi.Database
 import uniffi.zerohour_ffi.FfiException
+import uniffi.zerohour_ffi.PlannedReminder
+import uniffi.zerohour_ffi.ReminderActions
 
 /**
- * Shows reminder notifications, and takes them away again when their task
- * is no longer open.
+ * Shows reminder notifications, and takes them away again when their
+ * reminder no longer applies.
+ *
+ * The buttons come from core (`PlannedReminder.actions`): "Done" on a task's
+ * reminder; "Stop reminders" or "Stop for this year" on an event's daily
+ * reminder, plus "Keep" and "Remove" on the last day of a repeating event's
+ * range. "Done" goes to [ReminderDoneReceiver], the event buttons to
+ * [ReminderEventReceiver].
  *
  * Each notification is posted with its reminder's key as the *tag* (the
  * digest uses the one tag [DIGEST_TAG], so a new digest replaces
@@ -70,19 +79,16 @@ object ReminderNotifications {
     }
 
     /**
-     * Shows the reminder with this [key]: [title] and [body] from core, a tap
-     * opens the app. [itemId] is the task it is about (null for the digest).
-     * [accent] is the theme's accent colour, used by Android for the small
-     * icon and the app name (null leaves Android's default).
+     * Shows [reminder]: its title and text from core, a tap opens the app,
+     * and the buttons core chose. [accent] is the theme's accent colour, used
+     * by Android for the small icon and the app name (null leaves Android's
+     * default).
      */
-    fun show(
-        context: Context,
-        key: String,
-        itemId: String?,
-        title: String,
-        body: String,
-        accent: Int?,
-    ) {
+    fun show(context: Context, reminder: PlannedReminder, accent: Int?) {
+        val key = reminder.key
+        // Null for the digest, which is about several tasks.
+        val itemId = reminder.itemId
+        val title = reminder.title
         // Checked here as well as before scheduling: the user may have
         // blocked notifications since the alarm was set. (Android 13 and
         // later need the runtime permission; earlier ones only the switch.)
@@ -93,17 +99,71 @@ object ReminderNotifications {
             return
         }
         val tag = tagFor(key, itemId)
-        val builder = builder(context, title, body, accent)
-        // "Done" only for a reminder about one task; the digest has none.
+        val builder = builder(context, title, reminder.body, accent)
+        // The buttons core chose. Android shows at most three, as words (no
+        // icons: the 0 below). The digest (no item) never has any.
         if (itemId != null) {
-            builder.addAction(
-                0, // no icon: Android shows actions as words
-                context.getString(R.string.reminder_done),
-                doneIntent(context, key, tag, itemId, title),
+            // A small helper so each button below is one line.
+            fun event(label: Int, action: String) = builder.addAction(
+                0,
+                context.getString(label),
+                ReminderEventReceiver.intent(context, action, key, tag, itemId, title),
             )
+            when (reminder.actions) {
+                ReminderActions.NONE -> Unit
+                ReminderActions.DONE -> builder.addAction(
+                    0,
+                    context.getString(R.string.reminder_done),
+                    doneIntent(context, key, tag, itemId, title),
+                )
+                ReminderActions.STOP -> event(R.string.reminder_stop, ReminderEventReceiver.ACTION_STOP)
+                ReminderActions.STOP_FOR_YEAR ->
+                    event(R.string.reminder_stop_year, ReminderEventReceiver.ACTION_STOP)
+                ReminderActions.STOP_KEEP_REMOVE -> {
+                    event(R.string.reminder_stop_year, ReminderEventReceiver.ACTION_STOP)
+                    event(R.string.reminder_keep, ReminderEventReceiver.ACTION_KEEP)
+                    event(R.string.reminder_remove, ReminderEventReceiver.ACTION_REMOVE)
+                }
+            }
         }
         context.getSystemService(NotificationManager::class.java).notify(tag, NOTIFICATION_ID, builder.build())
     }
+
+    /**
+     * Replaces the notification [tag] with the second step of "Remove": "Remove
+     * "[title]" for good?", with "Yes, remove" and "Cancel". Removing deletes
+     * the event and can't be undone (with sync on, on every device too), so
+     * one tap on "Remove" never deletes anything by itself.
+     */
+    fun showRemoveConfirm(context: Context, key: String, tag: String, itemId: String, title: String) {
+        if (!canPost(context)) return
+        val builder = builder(
+            context,
+            context.getString(R.string.reminder_remove_title, title),
+            context.getString(R.string.reminder_remove_text),
+            null,
+        )
+        builder.addAction(
+            0,
+            context.getString(R.string.reminder_remove_yes),
+            ReminderEventReceiver.intent(context, ReminderEventReceiver.ACTION_REMOVE_CONFIRM, key, tag, itemId, title),
+        )
+        builder.addAction(
+            0,
+            context.getString(R.string.reminder_remove_cancel),
+            ReminderEventReceiver.intent(context, ReminderEventReceiver.ACTION_REMOVE_CANCEL, key, tag, itemId, title),
+        )
+        context.getSystemService(NotificationManager::class.java).notify(tag, NOTIFICATION_ID, builder.build())
+    }
+
+    /**
+     * True when the app may post notifications. Android 13 and later need the
+     * runtime permission; earlier ones only the switch, which Android checks.
+     */
+    private fun canPost(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
 
     /**
      * Replaces the notification posted with [tag] by one saying a problem
@@ -178,10 +238,13 @@ object ReminderNotifications {
     }
 
     /**
-     * Takes away every reminder notification whose task is no longer open
-     * (completed or deleted, here or on another device and then synced).
-     * The digest is left: it is a list as of its moment. With [db] null (the
-     * demo database), every reminder notification is taken away.
+     * Takes away every reminder notification that no longer applies: core
+     * would not plan it now (`reminderNow`), because its task was completed
+     * or deleted, its date or range moved, its event's reminders were
+     * stopped (here, or on another device and then synced), or a day-named
+     * reminder's day is over. The digest is left: it is a list as of its
+     * moment. With [db] null (the demo database), every reminder notification
+     * is taken away.
      */
     fun removeClosed(context: Context, db: Database?) {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -193,15 +256,14 @@ object ReminderNotifications {
                 continue
             }
             if (tag == DIGEST_TAG) continue
-            // A key starts with the item's id: "<item id>|Due|...".
-            val itemId = tag.substringBefore('|')
-            val open = try {
-                db.isOpenTask(itemId)
+            // Every other tag is a reminder's key ("<item id>|Due|...").
+            val applies = try {
+                db.reminderNow(tag, nowText()) != null
             } catch (e: FfiException) {
                 // Can't tell: leave it.
                 true
             }
-            if (!open) manager.cancel(tag, NOTIFICATION_ID)
+            if (!applies) manager.cancel(tag, NOTIFICATION_ID)
         }
     }
 

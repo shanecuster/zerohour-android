@@ -103,7 +103,7 @@
           the app Android wakes up to handle one message, even when the app
           is not open.
 
-          The alarm and Done receivers are exported="false": only the app's
+          The alarm, Done and event-button receivers are exported="false": only the app's
           own alarms and notification buttons can reach them.
         -->
         <receiver
@@ -111,6 +111,10 @@
             android:exported="false" />
         <receiver
             android:name=".reminders.ReminderDoneReceiver"
+            android:exported="false" />
+        <!-- Stop / Keep / Remove on an event's daily reminder. -->
+        <receiver
+            android:name=".reminders.ReminderEventReceiver"
             android:exported="false" />
 
         <!--

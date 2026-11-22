@@ -123,6 +123,12 @@ fun CalendarBox(
                     }
                 }
             }
+            // After a tap on a crossed-out day (before the start, for an end
+            // date): why nothing was picked, in the colour the Rust side chose.
+            val note = calendar.note
+            if (note != null) {
+                BasicText(text = note.text, style = look.text.copy(color = look.color(note.slot)))
+            }
             Row(modifier = Modifier.fillMaxWidth()) {
                 // "week: Su" shows the first day now; tapping switches it.
                 val first = calendar.dayLabels.firstOrNull().orEmpty()
@@ -142,7 +148,9 @@ fun CalendarBox(
 /**
  * One day of the grid: its number right-aligned in a [DAY_CELLS]-wide cell,
  * two rows tall, in the colour and style the Rust side chose. Tapping it
- * picks that date.
+ * picks that date. A day that can't be picked (before the start, for an end
+ * date) is crossed out; tapping it is still passed on, and the Rust side
+ * refuses it and adds the calendar's note.
  */
 @Composable
 private fun DayCell(look: TuiLook, day: CalendarDay, onPick: (String) -> Unit) {
@@ -163,7 +171,14 @@ private fun DayCell(look: TuiLook, day: CalendarDay, onPick: (String) -> Unit) {
                 withStyle(
                     SpanStyle(
                         fontWeight = if (day.bold) FontWeight.Bold else FontWeight.Normal,
-                        textDecoration = if (day.underline) TextDecoration.Underline else null,
+                        // Today underlined, a day that can't be picked
+                        // crossed out; `combine` allows both at once.
+                        textDecoration = TextDecoration.combine(
+                            listOfNotNull(
+                                TextDecoration.Underline.takeIf { day.underline },
+                                TextDecoration.LineThrough.takeIf { day.disabled },
+                            ),
+                        ),
                     ),
                 ) { append(digits) }
             },

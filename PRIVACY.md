@@ -1,6 +1,6 @@
 # Privacy policy: zerohour for Android
 
-Last updated: 2026-11-04
+Last updated: 2026-11-22
 
 zerohour is a to-do list and countdown app. It does not collect your data, and
 nothing you do in it is sent to the developer. There are no accounts, no ads, no
@@ -51,13 +51,14 @@ to enter it again. Sync is disabled for the sample
 ## Reminders and notifications
 
 Reminders are off until you switch them on. They are worked out on your phone
-from your tasks and shown by Android's own alarm and notification system. No
+from your tasks and events and shown by Android's own alarm and notification system. No
 reminder, and nothing about when your tasks or events are due, is sent
 anywhere. The reminder settings are stored on this phone only and are never
 synced. To know which alarms to cancel, the app keeps a list of the alarms it
-has set (task IDs and times, no titles) in a folder Android never backs up or
-copies to a new phone. Reminder notifications show the task's title, also on
-the lock screen; Android's own lock-screen notification settings apply.
+has set (task and event IDs and times, no titles) in a folder Android never
+backs up or copies to a new phone. Reminder notifications show the task's or
+event's title, also on the lock screen; Android's own lock-screen notification
+settings apply.
 
 ## Files you export
 
@@ -74,7 +75,8 @@ Settings → About → Open source licenses lists the open source components bui
 ## Your control
 
 You can edit or delete any task or event at any time, turn sync off, and
-uninstall the app. Data already copied to your own sync server is removed from
+uninstall the app. Remove on a reminder deletes the event, like deleting it in
+the app (after a second "Yes, remove"). Data already copied to your own sync server is removed from
 that server on the next sync after you delete it here.
 
 ## Google Play

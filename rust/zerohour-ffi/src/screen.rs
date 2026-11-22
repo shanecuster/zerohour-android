@@ -136,9 +136,15 @@ pub struct EventRow {
     /// The event's title.
     pub title: String,
     /// The date counted down to, e.g. "Fri Dec 25" (very wide screens only).
+    /// While an event's range runs, its last day.
     pub date_text: String,
-    /// The "78 days" countdown and its colour.
+    /// The "78 days" countdown and its colour; while an event's range runs,
+    /// "19 days left" or "last day!" (core's `view::event_label`).
     pub countdown: TextLabel,
+    /// The daily-reminder mark for an event with an end date: the bell
+    /// (accent while its range runs, muted before) or the crossed-out bell
+    /// (stopped), with its colour. `None` for an event without an end date.
+    pub mark: Option<TextLabel>,
     /// "↻ yearly", or empty for one-off events (wide screens only).
     pub repeat_text: String,
     /// The event's notes, if it has any.
@@ -155,6 +161,7 @@ pub struct Banner {
     /// accent colour at the left edge to its banner_end colour (the theme's
     /// orange) at the right edge, the same as the terminal app.
     pub column_colors: Vec<RgbColor>,
+    /// "Advent of Cyber: day 5 of 24" while an event's range runs, else
     /// "7 days to Christmas", or today's date when nothing is coming up.
     pub tagline: String,
 }
@@ -243,12 +250,19 @@ impl Database {
         let event_rows = view::event_rows(&items, today, false);
         // The tagline needs the sorted rows, so work it out before they are
         // consumed below.
-        let tagline = view::tagline_text(view::next_upcoming(&event_rows), today);
+        // Core lists running events first, so the tagline names one if any.
+        let tagline = view::tagline(&event_rows, today);
         let events = event_rows
             .into_iter()
             .map(|row| EventRow {
                 date_text: view::date_text(row.target, today),
-                countdown: view::countdown_label(row.days, narrow).into(),
+                countdown: view::event_label(&row, narrow).into(),
+                // `map` turns core's (icon, slot) into the label Kotlin draws.
+                mark: view::reminder_mark(&row.item, today).map(|(icon, slot)| TextLabel {
+                    text: icon.get(mode).to_string(),
+                    slot: slot.into(),
+                    bold: false,
+                }),
                 repeat_text: view::repeat_text(&row.item, mode),
                 id: row.item.id,
                 title: row.item.title,
@@ -275,6 +289,44 @@ impl Database {
             tasks,
             events,
         })
+    }
+}
+
+/// Whether an event has daily reminders, for the edit screen's line: "Daily
+/// reminders: on [stop]" or "stopped this year [resume]".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum DailyReminders {
+    /// A task, an event without an end date, or no such item: no line.
+    None,
+    /// An event with an end date whose current range is reminded.
+    On,
+    /// Stopped for the current range (the running one, or the next).
+    Stopped,
+}
+
+#[uniffi::export]
+impl Database {
+    /// The daily-reminder state of the item with this `id` on `now`'s date,
+    /// for the edit screen (see [`DailyReminders`]). Core decides: an event
+    /// has daily reminders when it has a range, and they are stopped when its
+    /// marker names the current range.
+    pub fn daily_reminders(&self, id: String, now: String) -> Result<DailyReminders, FfiError> {
+        let today = parse_now(&now)?.local.date();
+        let item = self.lock()?.get_item(&id)?;
+        // `let ... else`: a missing or deleted item has no line.
+        let Some(item) = item.filter(|item| !item.deleted) else {
+            return Ok(DailyReminders::None);
+        };
+        if zerohour_core::repeat::event_range(&item, today).is_none() {
+            return Ok(DailyReminders::None);
+        }
+        Ok(
+            if zerohour_core::reminders::reminders_stopped(&item, today) {
+                DailyReminders::Stopped
+            } else {
+                DailyReminders::On
+            },
+        )
     }
 }
 
@@ -419,6 +471,92 @@ mod tests {
         // A fresh database has nothing in it, and the tagline is the date.
         assert!(screen.tasks.is_empty() && screen.events.is_empty());
         assert_eq!(screen.banner.tagline, "Thu Oct 22 2026");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A file database (not the demo) holding a yearly Dec 1–24 "Advent of
+    /// Cyber" event and a plain Christmas countdown, in Unicode icon mode.
+    /// Returns the database, its file and the Advent event's id.
+    fn advent_db(name: &str) -> (Arc<Database>, std::path::PathBuf, String) {
+        use zerohour_core::model::{Item, Kind, RepeatRule};
+        let path = std::env::temp_dir().join(format!(
+            "zerohour-ffi-test-{}-screen-{name}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let db = Database::open(path.to_string_lossy().into_owned()).unwrap();
+        db.set_icon_mode(crate::database::IconMode::Unicode)
+            .unwrap();
+        let day = |d: u32| chrono::NaiveDate::from_ymd_opt(2026, 12, d);
+        let mut christmas = Item::new(Kind::Event, "Christmas", chrono::Utc::now());
+        christmas.date = day(25);
+        christmas.repeat = RepeatRule::Yearly;
+        let mut advent = Item::new(Kind::Event, "Advent of Cyber", chrono::Utc::now());
+        advent.date = day(1);
+        advent.end_date = day(24);
+        advent.repeat = RepeatRule::Yearly;
+        {
+            let guard = db.lock().unwrap();
+            guard.insert_item(&christmas).unwrap();
+            guard.insert_item(&advent).unwrap();
+        }
+        (db, path, advent.id)
+    }
+
+    /// Dec 5 2026, 09:15.
+    const DEC_5: &str = "2026-12-05T09:15:00-06:00";
+
+    #[test]
+    fn a_running_event_is_first_with_days_left_its_bell_and_the_tagline() {
+        let (db, path, _) = advent_db("running");
+        let screen = db.main_screen(DEC_5.to_string(), false).unwrap();
+        let advent = &screen.events[0];
+        assert_eq!(advent.title, "Advent of Cyber");
+        assert_eq!(advent.countdown.text, "19 days left");
+        assert_eq!(advent.countdown.slot, ColorSlot::Ok);
+        assert_eq!(advent.date_text, "Thu Dec 24");
+        let mark = advent.mark.as_ref().unwrap();
+        assert_eq!(
+            mark.text,
+            Icon::DailyReminder.get(zerohour_core::icons::IconMode::Unicode)
+        );
+        assert_eq!(mark.slot, ColorSlot::Accent);
+        assert_eq!(screen.events[1].mark, None, "no end date, no mark");
+        assert_eq!(screen.banner.tagline, "Advent of Cyber: day 5 of 24");
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn the_daily_reminder_state_follows_the_range_and_the_stop() {
+        let (db, path, id) = advent_db("state");
+        assert_eq!(
+            db.daily_reminders(id.clone(), DEC_5.into()).unwrap(),
+            DailyReminders::On
+        );
+        db.stop_event_reminders(id.clone(), DEC_5.into()).unwrap();
+        assert_eq!(
+            db.daily_reminders(id.clone(), DEC_5.into()).unwrap(),
+            DailyReminders::Stopped
+        );
+        // The stopped bell on the row.
+        let screen = db.main_screen(DEC_5.to_string(), false).unwrap();
+        assert_eq!(
+            screen.events[0].mark.as_ref().unwrap().text,
+            Icon::RemindersStopped.get(zerohour_core::icons::IconMode::Unicode)
+        );
+        // Next year's range is not stopped.
+        assert_eq!(
+            db.daily_reminders(id, "2027-11-01T09:00:00-05:00".into())
+                .unwrap(),
+            DailyReminders::On
+        );
+        assert_eq!(
+            db.daily_reminders("no such id".into(), DEC_5.into())
+                .unwrap(),
+            DailyReminders::None
+        );
+        drop(db);
         let _ = std::fs::remove_file(&path);
     }
 

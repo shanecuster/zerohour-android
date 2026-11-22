@@ -48,6 +48,11 @@
     <string name="loading">Loading…</string>
     <!-- Title of the box that explains why the database could not be read. -->
     <string name="error_title">" error "</string>
+    <!-- When the database can't be opened (for example a failed update
+         step). %1$s is the reason in core's words. There is deliberately
+         no button that deletes or resets anything. -->
+    <string name="open_failed_text">zerohour couldn\'t open your data: %1$s\n\nNothing was deleted. Each update step either finishes or is undone, so the data is as it was before. Try again, or update the app when a fix is out.</string>
+    <string name="open_failed_retry">[ try again ]</string>
 
     <!--
       The add/edit form. These words are the terminal app's (tui/src/ui/add.rs
@@ -74,6 +79,12 @@
     <string name="keep_after_pass">show after the date passes</string>
     <!-- Under the date field: opens the month-grid picker. -->
     <string name="open_calendar">[ calendar ]</string>
+    <!-- The edit screen of an event with an end date: its daily reminders,
+         and a tap to stop them for the current range or resume them. -->
+    <string name="daily_on">Daily reminders: on</string>
+    <string name="daily_stopped">Daily reminders: stopped</string>
+    <string name="daily_stop">[ stop ]</string>
+    <string name="daily_resume">[ resume ]</string>
     <string name="save_button">[ save ]</string>
     <string name="cancel_button">[ cancel ]</string>
     <!-- The calendar picker. %1$s is the first weekday now, e.g. "Su". -->
@@ -244,11 +255,32 @@
     <!-- Replaces a reminder's text when Done could not complete the task.
          %1$s is the reason, in core's words. -->
     <string name="reminder_done_failed">Couldn\'t mark it done: %1$s</string>
+    <!-- The buttons on an event's daily reminder (an event with an end
+         date). Core decides which ones show. "Stop reminders" on a one-off
+         event; "Stop for this year" on a repeating one; on the last day of a
+         repeating event's range also "Keep" and "Remove". -->
+    <string name="reminder_stop">Stop reminders</string>
+    <string name="reminder_stop_year">Stop for this year</string>
+    <string name="reminder_keep">Keep</string>
+    <string name="reminder_remove">Remove</string>
+    <!-- Remove's second step, in the same notification. %1$s is the event's
+         title. Removing deletes the event and can't be undone. -->
+    <string name="reminder_remove_title">Remove \"%1$s\" for good?</string>
+    <string name="reminder_remove_text">This can\'t be undone. With sync on, it\'s removed on every device.</string>
+    <string name="reminder_remove_yes">Yes, remove</string>
+    <string name="reminder_remove_cancel">Cancel</string>
+    <!-- Replaces the notification's text when a button could not do its
+         job. %1$s is the reason, in core's words. -->
+    <string name="reminder_stop_failed">Couldn\'t stop the reminders: %1$s</string>
+    <string name="reminder_remove_failed">Couldn\'t remove it: %1$s</string>
     <!-- The About page (Settings › About). The version line is built in
          code from the app name, the build's version name and code, and
          about_debug on debug builds: "zerohour 0.2.1 (4) debug". -->
     <string name="about_title">About</string>
     <string name="about_debug">debug</string>
+    <!-- Under the version line: the database's schema version (6 after
+         the end-date update), so a migration can be checked. -->
+    <string name="about_schema">database schema %1$d</string>
     <string name="about_privacy">Privacy policy ›</string>
     <string name="about_source_app">Source: Android app ›</string>
     <string name="about_source_core">Source: core and desktop app ›</string>

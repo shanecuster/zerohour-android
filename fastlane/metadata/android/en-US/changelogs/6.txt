@@ -1,0 +1,5 @@
+- Events can run for days: give one an end date (like Dec 1 to Dec 24) and get a reminder every day of the range, with Stop for this year, and Keep or Remove on the last day.
+- Running events are listed first, with the days left.
+- Repeating tasks can stop on an "Until" date.
+- The calendar won't pick an end before the start.
+- Items with end dates sync in a newer format: your other devices need this release of zerohour to show them.

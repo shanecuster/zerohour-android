@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -50,7 +51,9 @@ import com.shanetalkstech.zerohour.data.nowText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.shanetalkstech.zerohour.reminders.ReminderScheduler
 import uniffi.zerohour_ffi.ColorSlot
+import uniffi.zerohour_ffi.DailyReminders
 import uniffi.zerohour_ffi.FfiException
 import uniffi.zerohour_ffi.FieldRow
 import uniffi.zerohour_ffi.FormField
@@ -84,6 +87,10 @@ private const val VALUE_INDENT_CELLS = 2 + LABEL_CELLS + 1
  * the database, so only saving runs on a background thread.
  *
  * - [chooseKindFirst]: true when adding (start at "Task or Event?").
+ * - [editingId]: the edited item's id (null when adding). An event with an
+ *   end date then gets a "Daily reminders: on [ stop ]" / "stopped [ resume ]"
+ *   line, which acts at once on the saved event (like the notification's
+ *   Stop button), not on unsaved changes in the form.
  * - [preselectedKind]: the kind marked "›" on that first step: Event when
  *   "+ add" was tapped on the Events tab, Task otherwise. Either can still
  *   be tapped.
@@ -100,6 +107,7 @@ fun FormScreen(
     eventIcon: String,
     onClose: (status: String?) -> Unit,
     preselectedKind: ItemKind = ItemKind.TASK,
+    editingId: String? = null,
 ) {
     val context = LocalContext.current
     // Strings that are looked up in a callback (after a save, swipe or sync)
@@ -120,6 +128,40 @@ fun FormScreen(
     var focused by remember(form) { mutableStateOf<FormField?>(null) }
     // True while a save is running, so a double tap can't save twice.
     var saving by remember(form) { mutableStateOf(false) }
+    // The saved event's daily reminders (core decides: none, on or stopped).
+    // Read once on a background thread when an edit form opens.
+    var daily by remember(form) { mutableStateOf(DailyReminders.NONE) }
+    LaunchedEffect(form) {
+        if (editingId != null) {
+            daily = try {
+                withContext(Dispatchers.IO) { DatabaseHolder.get(context).dailyReminders(editingId, nowText()) }
+            } catch (e: FfiException) {
+                DailyReminders.NONE
+            }
+        }
+    }
+
+    // Stops or resumes the saved event's daily reminders, then reads the
+    // state again and re-plans the alarms (as the notification's Stop does).
+    fun toggleDaily() {
+        val id = editingId ?: return
+        scope.launch {
+            try {
+                daily = withContext(Dispatchers.IO) {
+                    val db = DatabaseHolder.get(context)
+                    if (daily == DailyReminders.STOPPED) {
+                        db.resumeEventReminders(id, nowText())
+                    } else {
+                        db.stopEventReminders(id, nowText())
+                    }
+                    db.dailyReminders(id, nowText())
+                }
+                ReminderScheduler.replanSoon(context)
+            } catch (e: FfiException) {
+                error = e.explanation()
+            }
+        }
+    }
 
     // Applies one change to the Rust form, then redraws from its new view.
     // These calls only work on memory, never the disk, so they are quick
@@ -196,13 +238,23 @@ fun FormScreen(
                 focused = FormField.DAYS
                 change { form.toggleDay(index.toUInt()) }
             },
-            onOpenCalendar = {
+            onOpenCalendar = { field ->
                 focusManager.clearFocus()
-                focused = FormField.DATE
-                change { form.openCalendar(nowText()) }
+                focused = field
+                // "Ends on" / "Until" opens on the start and won't pick a day
+                // before it; the date's own calendar has no limit.
+                change {
+                    if (field == FormField.END_DATE) {
+                        form.openEndCalendar(nowText())
+                    } else {
+                        form.openCalendar(nowText())
+                    }
+                }
             },
             onSave = { save() },
             onCancel = { onClose(null) },
+            daily = daily,
+            onToggleDaily = { toggleDaily() },
         )
 
         val calendar = view.calendar
@@ -363,9 +415,11 @@ private fun FieldsBox(
     onText: (FormField, String) -> Unit,
     onStep: (FormField, Boolean) -> Unit,
     onToggleDay: (Int) -> Unit,
-    onOpenCalendar: () -> Unit,
+    onOpenCalendar: (FormField) -> Unit,
     onSave: () -> Unit,
     onCancel: () -> Unit,
+    daily: DailyReminders = DailyReminders.NONE,
+    onToggleDaily: () -> Unit = {},
 ) {
     val isTask = view.kind == ItemKind.TASK
     val sectionColor = look.color(if (isTask) ColorSlot.TASK else ColorSlot.EVENT)
@@ -397,11 +451,29 @@ private fun FieldsBox(
                         onText = { onText(row.field, it) },
                         onStep = { onStep(row.field, it) },
                         onToggleDay = onToggleDay,
-                        onOpenCalendar = onOpenCalendar,
+                        onOpenCalendar = { onOpenCalendar(row.field) },
                     )
                 }
             }
             Spacer(Modifier.height(look.cell.rows(1)))
+            // An event with an end date (when editing): its daily reminders'
+            // state, and a tap to stop or resume them.
+            if (daily != DailyReminders.NONE) {
+                val stopped = daily == DailyReminders.STOPPED
+                Row(modifier = Modifier.padding(start = look.cell.columns(2))) {
+                    BasicText(
+                        text = stringResource(if (stopped) R.string.daily_stopped else R.string.daily_on),
+                        style = look.text.copy(color = look.color(if (stopped) ColorSlot.MUTED else ColorSlot.FOREGROUND)),
+                    )
+                    Spacer(Modifier.width(look.cell.columns(2)))
+                    TapText(
+                        look,
+                        stringResource(if (stopped) R.string.daily_resume else R.string.daily_stop),
+                        look.color(ColorSlot.ACCENT),
+                        onClick = onToggleDaily,
+                    )
+                }
+            }
             if (error != null) {
                 BasicText(
                     text = error,
@@ -458,7 +530,8 @@ private fun FieldLine(
         ) {
             BasicText(text = marker + row.label.padEnd(LABEL_CELLS) + " ", style = labelStyle)
             when (row.field) {
-                FormField.TITLE, FormField.DATE, FormField.TIME, FormField.EVERY_N, FormField.NOTES ->
+                FormField.TITLE, FormField.DATE, FormField.TIME, FormField.EVERY_N,
+                FormField.END_DATE, FormField.NOTES ->
                     TextInput(look, row.field, row.value, isFocused, onFocus, onText, Modifier.weight(1f))
 
                 FormField.PRIORITY, FormField.REPEAT, FormField.EVERY_UNIT,
@@ -515,7 +588,9 @@ private fun FieldLine(
                 modifier = indent,
             )
         }
-        if (row.field == FormField.DATE) {
+        // The date and the end date ("Ends on" / "Until") both have the
+        // calendar, as in the terminal app (Ctrl+D or F2 there).
+        if (row.field == FormField.DATE || row.field == FormField.END_DATE) {
             TapText(look, stringResource(R.string.open_calendar), accent, onClick = onOpenCalendar, modifier = indent)
         }
     }
@@ -557,13 +632,13 @@ private fun TextInput(
     // for the title and notes. "Next" moves on to the next text box.
     val keyboard = when (field) {
         FormField.EVERY_N -> KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
-        FormField.DATE, FormField.TIME ->
+        FormField.DATE, FormField.TIME, FormField.END_DATE ->
             KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next)
         else -> KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next)
     }
-    // An empty date or time shows "(none)" while not being edited, as in the
-    // terminal app.
-    val placeholder = if (field == FormField.DATE || field == FormField.TIME) {
+    // An empty date, time or end date shows "(none)" while not being edited,
+    // as in the terminal app.
+    val placeholder = if (field == FormField.DATE || field == FormField.TIME || field == FormField.END_DATE) {
         stringResource(R.string.none_placeholder)
     } else {
         null
