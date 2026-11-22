@@ -196,10 +196,18 @@ fun FormScreen(
                 focused = FormField.DAYS
                 change { form.toggleDay(index.toUInt()) }
             },
-            onOpenCalendar = {
+            onOpenCalendar = { field ->
                 focusManager.clearFocus()
-                focused = FormField.DATE
-                change { form.openCalendar(nowText()) }
+                focused = field
+                // "Ends on" / "Until" opens on the start and won't pick a day
+                // before it; the date's own calendar has no limit.
+                change {
+                    if (field == FormField.END_DATE) {
+                        form.openEndCalendar(nowText())
+                    } else {
+                        form.openCalendar(nowText())
+                    }
+                }
             },
             onSave = { save() },
             onCancel = { onClose(null) },
@@ -363,7 +371,7 @@ private fun FieldsBox(
     onText: (FormField, String) -> Unit,
     onStep: (FormField, Boolean) -> Unit,
     onToggleDay: (Int) -> Unit,
-    onOpenCalendar: () -> Unit,
+    onOpenCalendar: (FormField) -> Unit,
     onSave: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -397,7 +405,7 @@ private fun FieldsBox(
                         onText = { onText(row.field, it) },
                         onStep = { onStep(row.field, it) },
                         onToggleDay = onToggleDay,
-                        onOpenCalendar = onOpenCalendar,
+                        onOpenCalendar = { onOpenCalendar(row.field) },
                     )
                 }
             }
@@ -516,7 +524,9 @@ private fun FieldLine(
                 modifier = indent,
             )
         }
-        if (row.field == FormField.DATE) {
+        // The date and the end date ("Ends on" / "Until") both have the
+        // calendar, as in the terminal app (Ctrl+D or F2 there).
+        if (row.field == FormField.DATE || row.field == FormField.END_DATE) {
             TapText(look, stringResource(R.string.open_calendar), accent, onClick = onOpenCalendar, modifier = indent)
         }
     }
@@ -558,13 +568,13 @@ private fun TextInput(
     // for the title and notes. "Next" moves on to the next text box.
     val keyboard = when (field) {
         FormField.EVERY_N -> KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
-        FormField.DATE, FormField.TIME ->
+        FormField.DATE, FormField.TIME, FormField.END_DATE ->
             KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next)
         else -> KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next)
     }
-    // An empty date or time shows "(none)" while not being edited, as in the
-    // terminal app.
-    val placeholder = if (field == FormField.DATE || field == FormField.TIME) {
+    // An empty date, time or end date shows "(none)" while not being edited,
+    // as in the terminal app.
+    val placeholder = if (field == FormField.DATE || field == FormField.TIME || field == FormField.END_DATE) {
         stringResource(R.string.none_placeholder)
     } else {
         null
