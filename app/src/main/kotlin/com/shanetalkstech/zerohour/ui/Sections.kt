@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -21,7 +22,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -82,6 +85,8 @@ private const val REPEAT_CELLS = 17
  * - [onComplete]: the line was swiped right (complete the task).
  * - [onDelete]: the line was swiped left, with the ID and the plain title
  *   (ask whether to delete it).
+ * - [pull]: pulling the list down at its top to sync (see [PullToSync]).
+ *   It works on an empty list too.
  * - [modifier]: decides the box's size (the caller shares the height out).
  */
 @Composable
@@ -94,6 +99,7 @@ fun TasksBox(
     onEdit: (String) -> Unit,
     onComplete: (String) -> Unit,
     onDelete: (id: String, title: String) -> Unit,
+    pull: ListPull,
     modifier: Modifier = Modifier,
 ) {
     val sectionColor = look.color(ColorSlot.TASK)
@@ -103,46 +109,51 @@ fun TasksBox(
         modifier = modifier,
         title = sectionTitle(look, taskIcon, stringResource(R.string.tasks), tasks.size, sectionColor),
     ) {
-        if (tasks.isEmpty()) {
-            MutedText(look, stringResource(R.string.no_tasks))
-        } else {
-            // Fixed column widths, worked out once for the whole list so the
-            // columns line up from row to row. `maxOf` gives the largest value
-            // the block returns for any task.
-            val markerCells = cellCount(taskIcon)
-            val priorityCells = tasks.maxOf { cellCount(it.priorityIcon) }
-            val dueCells = dueColumnCells(tasks.maxOf { cellCount(it.due.text) }, narrow)
+        // The list (or the empty note) inside the pull-to-sync wrapper.
+        PullToSync(look, pull.syncIcon, pull.syncing, pull.onRelease) {
+            if (tasks.isEmpty()) {
+                EmptyNote(look, stringResource(R.string.no_tasks))
+            } else {
+                // Fixed column widths, worked out once for the whole list so the
+                // columns line up from row to row. `maxOf` gives the largest value
+                // the block returns for any task.
+                val markerCells = cellCount(taskIcon)
+                val priorityCells = tasks.maxOf { cellCount(it.priorityIcon) }
+                val dueCells = dueColumnCells(tasks.maxOf { cellCount(it.due.text) }, narrow)
 
-            // `LazyColumn` only builds the lines that are on screen, and
-            // scrolls when there are more than fit in the box. `key` tells it
-            // which line is which, so lines keep their identity on refresh.
-            LazyColumn {
-                items(tasks, key = { it.id }) { task ->
-                    SwipeLine(
-                        look = look,
-                        onTap = { onEdit(task.id) },
-                        onSwipeRight = { onComplete(task.id) },
-                        onSwipeLeft = { onDelete(task.id, task.plainTitle) },
-                    ) {
-                        CellText(look, taskIcon, sectionColor, markerCells)
-                        Gap(look)
-                        CellText(look, task.priorityIcon, look.color(task.prioritySlot), priorityCells)
-                        Gap(look)
-                        TitleText(look, task.title, look.color(task.titleSlot))
-                        if (showDates) {
+                // `LazyColumn` only builds the lines that are on screen, and
+                // scrolls when there are more than fit in the box. `key` tells it
+                // which line is which, so lines keep their identity on refresh.
+                // `fillMaxSize`: the list takes the whole box even when its lines
+                // are fewer, so a drag in the blank space below them pulls too.
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(tasks, key = { it.id }) { task ->
+                        SwipeLine(
+                            look = look,
+                            onTap = { onEdit(task.id) },
+                            onSwipeRight = { onComplete(task.id) },
+                            onSwipeLeft = { onDelete(task.id, task.plainTitle) },
+                        ) {
+                            CellText(look, taskIcon, sectionColor, markerCells)
                             Gap(look)
-                            CellText(look, task.dateText, look.color(ColorSlot.MUTED), DATE_CELLS)
-                        }
-                        Gap(look)
-                        CellText(look, task.due.text, look.color(task.due.slot), dueCells, task.due.bold)
-                        if (!narrow) {
+                            CellText(look, task.priorityIcon, look.color(task.prioritySlot), priorityCells)
                             Gap(look)
-                            CellText(
-                                look,
-                                task.priorityName,
-                                look.color(task.prioritySlot),
-                                PRIORITY_NAME_CELLS,
-                            )
+                            TitleText(look, task.title, look.color(task.titleSlot))
+                            if (showDates) {
+                                Gap(look)
+                                CellText(look, task.dateText, look.color(ColorSlot.MUTED), DATE_CELLS)
+                            }
+                            Gap(look)
+                            CellText(look, task.due.text, look.color(task.due.slot), dueCells, task.due.bold)
+                            if (!narrow) {
+                                Gap(look)
+                                CellText(
+                                    look,
+                                    task.priorityName,
+                                    look.color(task.prioritySlot),
+                                    PRIORITY_NAME_CELLS,
+                                )
+                            }
                         }
                     }
                 }
@@ -167,6 +178,7 @@ fun EventsBox(
     onEdit: (String) -> Unit,
     onComplete: (String) -> Unit,
     onDelete: (id: String, title: String) -> Unit,
+    pull: ListPull,
     modifier: Modifier = Modifier,
 ) {
     val sectionColor = look.color(ColorSlot.EVENT)
@@ -176,58 +188,63 @@ fun EventsBox(
         modifier = modifier,
         title = sectionTitle(look, eventIcon, stringResource(R.string.events), events.size, sectionColor),
     ) {
-        if (events.isEmpty()) {
-            MutedText(look, stringResource(R.string.no_events))
-        } else {
-            val markerCells = cellCount(eventIcon)
-            // The terminal app uses a fixed 5 (narrow) or 13 (wide) columns;
-            // never less than the longest countdown, so "today!" is not cut.
-            val longest = events.maxOf { cellCount(it.countdown.text) }
-            val countdownCells = maxOf(longest, if (narrow) 5 else 13)
-            // The daily-reminder bell gets its own column, only when some event
-            // has an end date, so a list without any looks as before (as in
-            // the terminal app). Its width is the widest mark shown.
-            val markCells = events.mapNotNull { it.mark }.maxOfOrNull { cellCount(it.text) }
+        // The list (or the empty note) inside the pull-to-sync wrapper.
+        PullToSync(look, pull.syncIcon, pull.syncing, pull.onRelease) {
+            if (events.isEmpty()) {
+                EmptyNote(look, stringResource(R.string.no_events))
+            } else {
+                val markerCells = cellCount(eventIcon)
+                // The terminal app uses a fixed 5 (narrow) or 13 (wide) columns;
+                // never less than the longest countdown, so "today!" is not cut.
+                val longest = events.maxOf { cellCount(it.countdown.text) }
+                val countdownCells = maxOf(longest, if (narrow) 5 else 13)
+                // The daily-reminder bell gets its own column, only when some event
+                // has an end date, so a list without any looks as before (as in
+                // the terminal app). Its width is the widest mark shown.
+                val markCells = events.mapNotNull { it.mark }.maxOfOrNull { cellCount(it.text) }
 
-            LazyColumn {
-                items(events, key = { it.id }) { event ->
-                    SwipeLine(
-                        look = look,
-                        onTap = { onEdit(event.id) },
-                        onSwipeRight = { onComplete(event.id) },
-                        onSwipeLeft = { onDelete(event.id, event.title) },
-                    ) {
-                        CellText(look, eventIcon, sectionColor, markerCells)
-                        if (markCells != null) {
-                            // The bell (accent while the range runs, muted
-                            // before), the crossed-out bell when stopped, or a
-                            // blank that keeps the titles lined up.
-                            val mark = event.mark
+                // `fillMaxSize`: the list takes the whole box even when its lines
+                // are fewer, so a drag in the blank space below them pulls too.
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(events, key = { it.id }) { event ->
+                        SwipeLine(
+                            look = look,
+                            onTap = { onEdit(event.id) },
+                            onSwipeRight = { onComplete(event.id) },
+                            onSwipeLeft = { onDelete(event.id, event.title) },
+                        ) {
+                            CellText(look, eventIcon, sectionColor, markerCells)
+                            if (markCells != null) {
+                                // The bell (accent while the range runs, muted
+                                // before), the crossed-out bell when stopped, or a
+                                // blank that keeps the titles lined up.
+                                val mark = event.mark
+                                Gap(look)
+                                CellText(
+                                    look,
+                                    mark?.text.orEmpty(),
+                                    look.color(mark?.slot ?: ColorSlot.MUTED),
+                                    markCells,
+                                )
+                            }
+                            Gap(look)
+                            TitleText(look, event.title, look.color(ColorSlot.FOREGROUND))
+                            if (showDates) {
+                                Gap(look)
+                                CellText(look, event.dateText, look.color(ColorSlot.MUTED), DATE_CELLS)
+                            }
                             Gap(look)
                             CellText(
                                 look,
-                                mark?.text.orEmpty(),
-                                look.color(mark?.slot ?: ColorSlot.MUTED),
-                                markCells,
+                                event.countdown.text,
+                                look.color(event.countdown.slot),
+                                countdownCells,
+                                event.countdown.bold,
                             )
-                        }
-                        Gap(look)
-                        TitleText(look, event.title, look.color(ColorSlot.FOREGROUND))
-                        if (showDates) {
-                            Gap(look)
-                            CellText(look, event.dateText, look.color(ColorSlot.MUTED), DATE_CELLS)
-                        }
-                        Gap(look)
-                        CellText(
-                            look,
-                            event.countdown.text,
-                            look.color(event.countdown.slot),
-                            countdownCells,
-                            event.countdown.bold,
-                        )
-                        if (!narrow) {
-                            Gap(look)
-                            CellText(look, event.repeatText, look.color(ColorSlot.MUTED), REPEAT_CELLS)
+                            if (!narrow) {
+                                Gap(look)
+                                CellText(look, event.repeatText, look.color(ColorSlot.MUTED), REPEAT_CELLS)
+                            }
                         }
                     }
                 }
@@ -383,6 +400,23 @@ private fun SwipeHint(look: TuiLook, text: Int, slot: ColorSlot, alignment: Alig
             style = look.text.copy(color = look.color(slot), fontWeight = FontWeight.Bold),
             modifier = Modifier.padding(horizontal = look.cell.columns(1)),
         )
+    }
+}
+
+/**
+ * The muted note shown in an empty list ("No tasks yet…"), in a column that
+ * fills the box and can scroll. It never has anything to scroll, but being
+ * scrollable makes a downward drag reach [PullToSync], so an empty list can
+ * be pulled to sync like a full one.
+ */
+@Composable
+private fun EmptyNote(look: TuiLook, text: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        MutedText(look, text)
     }
 }
 

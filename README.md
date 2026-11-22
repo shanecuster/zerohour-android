@@ -13,6 +13,15 @@ Status: early development. The app is built in small steps (see
 [ANDROID_PLAN.md](ANDROID_PLAN.md)); the Rust engine is shared with the terminal
 app and pinned to one commit.
 
+## Gestures
+
+- **Swipe right** on a task: done. **Swipe left**: delete (it asks first).
+  **Tap**: edit.
+- **Pull down** at the top of the Tasks or Events list and let go when it
+  says "release to sync": sync now (the phone vibrates once at that point).
+  It shows "syncing…" until it's done, and the result in the bottom row. With
+  sync off, it says where to turn it on; the demo database never syncs.
+
 ## How it fits together
 
 - **UI:** Kotlin + Jetpack Compose. Box-drawing borders are drawn on a Compose
@@ -26,8 +35,8 @@ app and pinned to one commit.
   `INTERNET` (sync) and, for reminders, `POST_NOTIFICATIONS`,
   `SCHEDULE_EXACT_ALARM` and `RECEIVE_BOOT_COMPLETED`. Syncing to
   your own CouchDB server is optional, off by default, and `https://` only;
-  it runs when you tap sync now, and when the app opens if you switch
-  **On launch** on.
+  it runs when you tap sync now or pull down on a list, and when the app
+  opens if you switch **On launch** on.
   The server needs a certificate from a public certificate authority (such as
   Let's Encrypt): the app checks it against Mozilla's list built into the app,
   so self-signed and private-CA servers are not supported. The full policy is
