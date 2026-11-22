@@ -4,16 +4,16 @@
 # (Android Studio 2026), so it is known to work together.
 
 [versions]
-agp = "9.5.1"
-coreKtx = "1.10.1"
-activityCompose = "1.8.0"
-kotlin = "2.2.10"
+agp = "9.5.2"
+coreKtx = "1.19.1"
+activityCompose = "1.13.0"
+kotlin = "2.2.21"
 composeBom = "2026.02.01"
 # Added for zerohour: coroutines (the app calls the blocking Rust library on a
 # background dispatcher -- zerohour's sync is blocking ureq, not async) and JNA
 # (how Kotlin loads and calls the Rust library).
-coroutines = "1.10.2"
-jna = "5.17.0"
+coroutines = "1.11.0"
+jna = "5.19.1"
 # Added for zerohour's reminders: JUnit 4 runs the plain-JVM unit tests in
 # app/src/test (the daylight-saving rule and the alarm request codes). It is
 # a test-only dependency: it never goes into the app.
