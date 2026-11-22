@@ -215,6 +215,8 @@
          down to sync (ui/PullToSync.kt); "syncing…" reuses sync_state_running. -->
     <string name="pull_hint">↓ pull to sync</string>
     <string name="pull_release">↑ release to sync</string>
+    <!-- The bottom row after a pull with sync switched off. -->
+    <string name="pull_sync_off">Sync is off: turn it on in Settings › Sync.</string>
     <!-- The header indicator's name for screen readers. -->
     <string name="sync_now_description">Sync now</string>
 

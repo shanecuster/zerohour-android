@@ -43,6 +43,13 @@ private const val PULL_THRESHOLD_ROWS = 3
 private const val PULL_MAX_THRESHOLDS = 2
 
 /**
+ * What a list needs to offer the pull, bundled so the Tasks and Events boxes
+ * (and the screen that passes it to them) take one parameter instead of
+ * three. The fields are those of [PullToSync] with the same names.
+ */
+class ListPull(val syncIcon: String, val syncing: Boolean, val onRelease: () -> Unit)
+
+/**
  * Wraps a scrollable list ([content]) so that pulling it down while it is at
  * the top, past [PULL_THRESHOLD_ROWS] rows, and letting go calls [onRelease].
  * Letting go earlier only springs back.

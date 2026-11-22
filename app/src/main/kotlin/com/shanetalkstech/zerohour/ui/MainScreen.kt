@@ -44,10 +44,12 @@ import androidx.compose.ui.text.withStyle
 import com.shanetalkstech.zerohour.R
 import com.shanetalkstech.zerohour.data.DatabaseHolder
 import com.shanetalkstech.zerohour.data.DataChanges
+import com.shanetalkstech.zerohour.data.PullSyncAction
 import com.shanetalkstech.zerohour.data.SyncRunner
 import com.shanetalkstech.zerohour.data.SyncState
 import com.shanetalkstech.zerohour.data.explanation
 import com.shanetalkstech.zerohour.data.nowText
+import com.shanetalkstech.zerohour.data.pullSyncAction
 import com.shanetalkstech.zerohour.reminders.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -198,6 +200,14 @@ fun MainRoute() {
     val syncState by SyncRunner.state.collectAsState()
     val syncResults = syncResultLines(syncState)
     val alreadySyncing = stringResource(R.string.sync_already_running)
+    // The bottom-row messages for a pull that can't sync (see `onPull` below).
+    val syncOffPull = stringResource(R.string.pull_sync_off)
+    val demoNoSync = stringResource(R.string.sync_demo_note)
+    // True while the list's pull line should stay as "syncing…": set when a
+    // pull starts a sync or finds one running, cleared as soon as no sync
+    // runs. A tap on the header or the launch sync never sets it, so those
+    // don't move the list.
+    var pullHeld by remember { mutableStateOf(false) }
     // The tab on show. `rememberSaveable` also keeps it if Android recreates
     // the screen (for example after the system language changes), not only
     // across redraws.
@@ -260,6 +270,8 @@ fun MainRoute() {
     // runs each time the runner reports a new result.
     LaunchedEffect(syncState) {
         val state = syncState
+        // Any state but "running" ends the pull's "syncing…" line.
+        if (state != SyncState.Running) pullHeld = false
         // `when` with a type check (`is`) gives a value for each case: the
         // sync's `atLaunch` flag, or null while nothing has finished.
         val atLaunch = when (state) {
@@ -457,6 +469,32 @@ fun MainRoute() {
                             status = null
                             pendingDelete = PendingDelete(id, title)
                         },
+                        pull = ListPull(
+                            syncIcon = s.sync.icons.sync,
+                            syncing = pullHeld && syncState == SyncState.Running,
+                            // A pull let go past the threshold: core's sync
+                            // settings decide what it does (`pullSyncAction`,
+                            // checked by PullSyncTest). The header tap's paths
+                            // are reused, so both behave the same.
+                            onRelease = {
+                                val action = pullSyncAction(
+                                    syncOn = s.sync.enabled,
+                                    demo = s.sync.demo,
+                                    firstSyncWarning = s.sync.firstSyncWarning,
+                                    running = syncState == SyncState.Running,
+                                )
+                                when (action) {
+                                    PullSyncAction.START -> {
+                                        pullHeld = true
+                                        startSync()
+                                    }
+                                    PullSyncAction.SHOW_RUNNING -> pullHeld = true
+                                    PullSyncAction.ASK_FIRST -> askFirstSync = s.sync.localItems.toInt()
+                                    PullSyncAction.OFF -> status = Status(syncOffPull, ColorSlot.MUTED)
+                                    PullSyncAction.DEMO -> status = Status(demoNoSync, ColorSlot.MUTED)
+                                }
+                            },
+                        ),
                     )
                     val pending = pendingDelete
                     if (pending != null) {
@@ -580,7 +618,8 @@ private fun millisUntilNextMinute(): Long {
  * sync indicator (null: none), and [onSync] runs when it is tapped. [onAdd] runs when
  * "+ add" is tapped, [onEdit] when a line is tapped (with the item's ID),
  * [onComplete] when one is swiped right, [onDelete] when one is swiped left
- * (with its ID and title).
+ * (with its ID and title). [pull] is passed to the Tasks and Events boxes for
+ * pulling the list down to sync.
  */
 @Composable
 private fun MainScreenContent(
@@ -600,6 +639,7 @@ private fun MainScreenContent(
     onEdit: (String) -> Unit,
     onComplete: (String) -> Unit,
     onDelete: (id: String, title: String) -> Unit,
+    pull: ListPull,
 ) {
     val settings = screen.settings
     // The banner needs: a list tab, the setting on, room for its letters with
@@ -641,6 +681,7 @@ private fun MainScreenContent(
                 onEdit = onEdit,
                 onComplete = onComplete,
                 onDelete = onDelete,
+                pull = pull,
                 modifier = fill,
             )
             Tab.EVENTS -> EventsBox(
@@ -652,6 +693,7 @@ private fun MainScreenContent(
                 onEdit = onEdit,
                 onComplete = onComplete,
                 onDelete = onDelete,
+                pull = pull,
                 modifier = fill,
             )
             Tab.STATS -> StatsTab(
