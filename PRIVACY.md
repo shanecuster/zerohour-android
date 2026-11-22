@@ -76,8 +76,15 @@ Settings → About → Open source licenses lists the open source components bui
 
 You can edit or delete any task or event at any time, turn sync off, and
 uninstall the app. Remove on a reminder deletes the event, like deleting it in
-the app (after a second "Yes, remove"). Data already copied to your own sync server is removed from
-that server on the next sync after you delete it here.
+the app (after a second "Yes, remove").
+
+Deleting hides a task or event everywhere, but does not erase it: the app keeps
+it on your phone, marked as deleted, so that sync can tell your other devices
+about the deletion. With sync on, your own sync server receives that deleted
+copy, with all its fields, and keeps it too; the server can also keep earlier
+versions of it until the database is compacted. To erase everything for good,
+uninstall the app (or clear its storage in Android's settings) and delete the
+database on your sync server.
 
 ## Google Play
 
