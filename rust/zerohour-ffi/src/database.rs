@@ -275,6 +275,14 @@ impl Database {
         self.file.is_none()
     }
 
+    /// The database's schema version: how many of core's migrations it has.
+    /// 6 with this core (5 and 6 added end dates and the stop marker). The
+    /// About page shows it, so after an update anyone can check the
+    /// migration ran, without adb or a debuggable build.
+    pub fn schema_version(&self) -> Result<i64, FfiError> {
+        Ok(self.lock()?.schema_version()?)
+    }
+
     /// The display settings saved in this database, with defaults filled in.
     pub fn display_settings(&self) -> Result<DisplaySettings, FfiError> {
         let db = self.lock()?;
@@ -294,6 +302,20 @@ mod tests {
             "zerohour-ffi-test-{}-{name}.db",
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn a_new_database_file_is_at_schema_6() {
+        let path = temp_db_path("schema");
+        let _ = std::fs::remove_file(&path);
+        let db = Database::open(path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(db.schema_version().unwrap(), 6);
+        // Opening it again changes nothing.
+        drop(db);
+        let again = Database::open(path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(again.schema_version().unwrap(), 6);
+        drop(again);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

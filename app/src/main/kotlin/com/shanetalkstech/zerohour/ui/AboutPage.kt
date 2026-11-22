@@ -35,9 +35,11 @@ import com.shanetalkstech.zerohour.about.shareMessage
 import com.shanetalkstech.zerohour.about.shareText
 import com.shanetalkstech.zerohour.about.showsRateRow
 import com.shanetalkstech.zerohour.about.versionLine
+import com.shanetalkstech.zerohour.data.DatabaseHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import uniffi.zerohour_ffi.ColorSlot
+import uniffi.zerohour_ffi.FfiException
 
 /**
  * The About page, opened from "About ›" on the settings page. It fills the
@@ -76,6 +78,18 @@ fun AboutPage(look: TuiLook, onOpenLicenses: () -> Unit, onClose: () -> Unit) {
     LaunchedEffect(Unit) {
         source = withContext(Dispatchers.IO) { installSource(context) }
     }
+    // The database's schema version, for the line under the version (null
+    // until read, or if it can't be read: then the line is left out).
+    var schema by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(Unit) {
+        schema = withContext(Dispatchers.IO) {
+            try {
+                DatabaseHolder.get(context).schemaVersion()
+            } catch (e: FfiException) {
+                null
+            }
+        }
+    }
     // True after a link could not be opened: shows the "No app" message.
     var failed by remember { mutableStateOf(false) }
 
@@ -107,6 +121,11 @@ fun AboutPage(look: TuiLook, onOpenLicenses: () -> Unit, onClose: () -> Unit) {
     ) {
         Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
             MutedText(look, version)
+            // "database schema 6": lets anyone check an update's migration ran.
+            val schemaVersion = schema
+            if (schemaVersion != null) {
+                MutedText(look, stringResource(R.string.about_schema, schemaVersion))
+            }
             Spacer(Modifier.height(look.cell.rows(1)))
 
             AboutRow(look, stringResource(R.string.about_privacy), foreground) {

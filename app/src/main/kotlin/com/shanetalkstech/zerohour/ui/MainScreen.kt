@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -98,6 +100,14 @@ private sealed interface LoadState {
 
     /** Reading failed; [message] says why. */
     data class Failed(val message: String) : LoadState
+
+    /**
+     * The database could not even be opened (for example a migration after
+     * an update failed); [message] is the reason in core's words. Shown on its
+     * own screen with only "try again": nothing there can delete or reset
+     * data (see [OpenFailedScreen]).
+     */
+    data class OpenFailed(val message: String) : LoadState
 }
 
 /**
@@ -337,6 +347,7 @@ fun MainRoute() {
             when (val s = state) {
                 LoadState.Loading -> MessageScreen(look, stringResource(R.string.loading), ColorSlot.MUTED)
                 is LoadState.Failed -> MessageScreen(look, s.message, ColorSlot.DANGER)
+                is LoadState.OpenFailed -> OpenFailedScreen(look, s.message, onRetry = { reloads++ })
                 is LoadState.Loaded -> if (form != null) {
                     // The form takes the whole screen until it closes. Its
                     // Rust object is freed by the garbage collector once
@@ -511,8 +522,15 @@ fun MainRoute() {
  */
 private suspend fun load(context: Context, narrow: Boolean): LoadState =
     withContext(Dispatchers.IO) {
+        // Opening first, on its own, so a database that can't be opened (a
+        // failed migration) gets its own screen. `DatabaseHolder` keeps no
+        // half-open database, so "try again" really opens it again.
+        val db = try {
+            DatabaseHolder.get(context)
+        } catch (e: FfiException) {
+            return@withContext LoadState.OpenFailed(e.explanation())
+        }
         try {
-            val db = DatabaseHolder.get(context)
             val now = nowText()
             LoadState.Loaded(db.mainScreen(now, narrow), db.statsScreen(now), db.syncStatus(now))
         } catch (e: FfiException) {
@@ -835,6 +853,31 @@ private fun headerTitle(look: TuiLook, demo: Boolean): AnnotatedString {
  */
 @Composable
 private fun MessageScreen(look: TuiLook, message: String, slot: ColorSlot) {
+    MessageBox(look, message, slot)
+}
+
+/**
+ * The screen shown when the database can't be opened: core's reason, what it
+ * means for the data, and one button, "try again". On purpose there is no
+ * button that deletes, resets or replaces anything: a migration runs each step
+ * in a transaction, so a failed one leaves the file as it was, and the safe
+ * thing is to keep it until the cause is known (an update, or help from the
+ * issue tracker).
+ */
+@Composable
+private fun OpenFailedScreen(look: TuiLook, message: String, onRetry: () -> Unit) {
+    MessageBox(look, stringResource(R.string.open_failed_text, message), ColorSlot.DANGER) {
+        Spacer(Modifier.height(look.cell.rows(1)))
+        TapText(look, stringResource(R.string.open_failed_retry), look.color(ColorSlot.ACCENT), onClick = onRetry)
+    }
+}
+
+/**
+ * A full-screen box with [message] in the [slot] colour (an error title for
+ * the danger colour), and anything [below] it, such as a button.
+ */
+@Composable
+private fun MessageBox(look: TuiLook, message: String, slot: ColorSlot, below: @Composable () -> Unit = {}) {
     val isError = slot == ColorSlot.DANGER
     TuiBox(
         look = look,
@@ -849,6 +892,9 @@ private fun MessageScreen(look: TuiLook, message: String, slot: ColorSlot) {
             null
         },
     ) {
-        BasicText(text = message, style = look.text.copy(color = look.color(slot)))
+        Column {
+            BasicText(text = message, style = look.text.copy(color = look.color(slot)))
+            below()
+        }
     }
 }
