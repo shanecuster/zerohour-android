@@ -19,12 +19,12 @@
 //! themselves whether and when to remind. Each setter saves at once, like the
 //! other settings rows.
 
-use chrono::{NaiveTime, TimeDelta};
+use chrono::{NaiveDateTime, NaiveTime, TimeDelta};
 use zerohour_core::clock::{TimeFormat as CoreTimeFormat, format_time};
 use zerohour_core::model::Kind;
 use zerohour_core::reminders::{
-    MAX_LEAD_MINUTES, Reminder, ReminderKind as CoreReminderKind, ReminderSettings,
-    ReminderSettingsError, plan,
+    MAX_LEAD_MINUTES, Reminder, ReminderActions as CoreReminderActions,
+    ReminderKind as CoreReminderKind, ReminderSettings, ReminderSettingsError, plan,
 };
 
 use crate::database::{Database, StoredSettings, parse_now};
@@ -92,6 +92,39 @@ impl From<CoreReminderKind> for ReminderKind {
     }
 }
 
+/// Which buttons a reminder's notification offers. Mirror of core's
+/// `reminders::ReminderActions`: core decides, so the app never works it out
+/// from the item and can't disagree with the plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ReminderActions {
+    /// No buttons: the overdue digest, which is about several tasks.
+    None,
+    /// "Done": every task reminder.
+    Done,
+    /// "Stop reminders": a one-off event's daily reminder.
+    Stop,
+    /// "Stop for this year": a repeating event's daily reminder before its
+    /// last day.
+    StopForYear,
+    /// "Stop for this year", "Keep" and "Remove": a repeating event's daily
+    /// reminder on the last day of its range.
+    StopKeepRemove,
+}
+
+/// Converts core's buttons into the mirror.
+impl From<CoreReminderActions> for ReminderActions {
+    /// One arm per value; the compiler checks none is missed.
+    fn from(actions: CoreReminderActions) -> ReminderActions {
+        match actions {
+            CoreReminderActions::None => ReminderActions::None,
+            CoreReminderActions::Done => ReminderActions::Done,
+            CoreReminderActions::Stop => ReminderActions::Stop,
+            CoreReminderActions::StopForYear => ReminderActions::StopForYear,
+            CoreReminderActions::StopKeepRemove => ReminderActions::StopKeepRemove,
+        }
+    }
+}
+
 /// One reminder from core's plan, as Kotlin schedules and shows it.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PlannedReminder {
@@ -99,8 +132,7 @@ pub struct PlannedReminder {
     /// reminder the same way every time it is planned, so the app schedules
     /// it once and can cancel it when it is no longer planned.
     pub key: String,
-    /// The task it is about, or `None` for the digest. The notification
-    /// offers "Done" only when there is one.
+    /// The task or event it is about, or `None` for the digest.
     pub item_id: Option<String>,
     /// Why it fires.
     pub kind: ReminderKind,
@@ -112,8 +144,13 @@ pub struct PlannedReminder {
     pub when_text: String,
     /// The notification's title (the task's title, or "3 overdue tasks").
     pub title: String,
-    /// The notification's text, e.g. "Due 2:00 PM", in core's words.
+    /// The notification's text, e.g. "Due 2:00 PM" or "Day 5 of 24 · 19 days
+    /// left", in core's words.
     pub body: String,
+    /// True only for an event's daily reminder on the last day of its range.
+    pub last_day: bool,
+    /// The buttons its notification offers (see [`ReminderActions`]).
+    pub actions: ReminderActions,
 }
 
 impl PlannedReminder {
@@ -132,8 +169,24 @@ impl PlannedReminder {
             item_id: reminder.item_id,
             title: reminder.title,
             body: reminder.body,
+            last_day: reminder.last_day,
+            actions: reminder.actions.into(),
         }
     }
+}
+
+/// The time part of a reminder key, "<item id>|<kind>|2026-10-26T14:00", or
+/// `None` if the key doesn't end that way. The id is a UUID (or "digest"), so
+/// it never contains '|'; `rsplit` still reads from the end to be safe.
+fn key_fire_at(key: &str) -> Option<NaiveDateTime> {
+    let time = key.rsplit('|').next()?;
+    NaiveDateTime::parse_from_str(time, FIRE_AT_FORMAT).ok()
+}
+
+/// True for the kinds whose text names a day ("Due today", "Day 5 of 24"):
+/// once that day is over, such a reminder would say something untrue.
+fn names_its_day(kind: CoreReminderKind) -> bool {
+    matches!(kind, CoreReminderKind::DayOf | CoreReminderKind::Daily)
 }
 
 /// Turns core's "could not save the reminder settings" into an `FfiError`.
@@ -268,11 +321,80 @@ impl Database {
             .collect())
     }
 
+    /// The reminder named by `key` as core would plan it now, or `None` if it
+    /// no longer applies. The app asks this when an alarm set earlier goes
+    /// off (and for each notification still showing, after a re-plan), and
+    /// shows what comes back, with its current text and buttons.
+    ///
+    /// The key carries the item, the kind and the time
+    /// ("<id>|Daily|2026-12-05T09:00"), so this simply plans the one minute
+    /// ending at that time and looks for the same key. That covers every
+    /// way a reminder can stop applying, here or through a sync since the
+    /// alarm was set: the task was completed or deleted, a date or time or an
+    /// event's range moved, the event's reminders were stopped, the reminders
+    /// (or the digest) were switched off.
+    ///
+    /// `now` matters only for reminders whose text names a day ("Due today",
+    /// "Day 5 of 24"): once that day is over by `now`, they are `None`.
+    /// Always `None` on the demo database, and for a key that can't be read.
+    pub fn reminder_now(
+        &self,
+        key: String,
+        now: String,
+    ) -> Result<Option<PlannedReminder>, FfiError> {
+        let today = parse_now(&now)?.local.date();
+        if self.is_demo() {
+            return Ok(None);
+        }
+        let Some(fire_at) = key_fire_at(&key) else {
+            return Ok(None);
+        };
+        let db = self.lock()?;
+        let settings = ReminderSettings::load(&db)?;
+        let time_format = StoredSettings::load(&db)?.time_format;
+        let items = db.list_items()?;
+        // The planner returns reminders strictly after its "now" and up to
+        // its "until", so this window holds exactly the ones at `fire_at`.
+        let found = plan(
+            &items,
+            fire_at - TimeDelta::minutes(1),
+            fire_at,
+            &settings,
+            time_format,
+        )
+        .into_iter()
+        .find(|reminder| reminder.key() == key);
+        // `filter` keeps it only if the test passes: here, not a day-named
+        // reminder whose day is over.
+        Ok(found
+            .filter(|reminder| !(names_its_day(reminder.kind) && fire_at.date() < today))
+            .map(|reminder| PlannedReminder::new(reminder, time_format)))
+    }
+
+    /// Stops an event's daily reminders for its current range (the running
+    /// one, or the next one: "skip this year"), as the "Stop" button and the
+    /// edit screen do. Core's `Db::stop_event_reminders`; refused for a task,
+    /// an event without an end date, or a deleted event. (On the demo it only
+    /// changes the in-memory sample, like every other edit there.)
+    pub fn stop_event_reminders(&self, id: String, now: String) -> Result<(), FfiError> {
+        let now = parse_now(&now)?;
+        self.lock()?
+            .stop_event_reminders(&id, now.local.date(), now.utc)?;
+        Ok(())
+    }
+
+    /// Undoes [`Database::stop_event_reminders`] (the edit screen's
+    /// "resume"). Core's `Db::resume_event_reminders`.
+    pub fn resume_event_reminders(&self, id: String, now: String) -> Result<(), FfiError> {
+        let now = parse_now(&now)?;
+        self.lock()?.resume_event_reminders(&id, now.utc)?;
+        Ok(())
+    }
+
     /// True when the item with this `id` is a task that is still open: not
-    /// completed, not deleted, and not an event. The app checks this before
-    /// showing a reminder whose alarm was set earlier, and to take away
-    /// notifications about tasks that were completed since (here, or on
-    /// another device and synced).
+    /// completed, not deleted, and not an event. The "Done" button checks
+    /// this when completing fails, to tell a real failure from a task that
+    /// was already completed or deleted.
     pub fn is_open_task(&self, id: String) -> Result<bool, FfiError> {
         let item = self.lock()?.get_item(&id)?;
         // `is_some_and` is true only for `Some(item)` that passes the test.
@@ -523,6 +645,121 @@ mod tests {
         drop(db);
         let _ = std::fs::remove_file(&path);
     }
+
+    /// Stores a yearly Dec 1–24 "Advent of Cyber" event and returns its id.
+    fn add_advent(db: &Database) -> String {
+        let mut item = Item::new(Kind::Event, "Advent of Cyber", Utc::now());
+        item.date = NaiveDate::from_ymd_opt(2026, 12, 1);
+        item.end_date = NaiveDate::from_ymd_opt(2026, 12, 24);
+        item.repeat = RepeatRule::Yearly;
+        db.lock().unwrap().insert_item(&item).unwrap();
+        item.id
+    }
+
+    /// Dec 23 2026, 08:00 Central (standard time, six hours behind UTC).
+    const DEC_23_8AM: &str = "2026-12-23T08:00:00-06:00";
+
+    #[test]
+    fn daily_reminders_carry_their_buttons_and_last_day() {
+        let (db, path) = file_db("daily");
+        db.set_reminders_enabled(true).unwrap();
+        let id = add_advent(&db);
+        let plan = db.plan_reminders(DEC_23_8AM.into(), 48).unwrap();
+        assert_eq!(plan.len(), 2, "Dec 23 and Dec 24 at 9:00");
+        assert_eq!(plan[0].kind, ReminderKind::Daily);
+        assert_eq!(plan[0].item_id.as_deref(), Some(id.as_str()));
+        assert_eq!(plan[0].body, "Day 23 of 24 · 1 day left");
+        assert_eq!(plan[0].actions, ReminderActions::StopForYear);
+        assert!(!plan[0].last_day);
+        assert_eq!(plan[1].body, "Last day");
+        assert_eq!(plan[1].actions, ReminderActions::StopKeepRemove);
+        assert!(plan[1].last_day);
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn reminder_now_gives_the_reminder_while_it_still_applies() {
+        let (db, path) = file_db("now");
+        db.set_reminders_enabled(true).unwrap();
+        let id = add_advent(&db);
+        let key = format!("{id}|Daily|2026-12-23T09:00");
+        let at_nine = "2026-12-23T09:00:00-06:00".to_string();
+        let shown = db
+            .reminder_now(key.clone(), at_nine.clone())
+            .unwrap()
+            .unwrap();
+        assert_eq!(shown.key, key);
+        assert_eq!(shown.body, "Day 23 of 24 · 1 day left");
+        // A day-named reminder the next day: its text would be wrong.
+        assert_eq!(
+            db.reminder_now(key.clone(), DEC_24_NOON.into()).unwrap(),
+            None
+        );
+        // Stopped: gone. Resumed: back.
+        db.stop_event_reminders(id.clone(), at_nine.clone())
+            .unwrap();
+        assert_eq!(db.reminder_now(key.clone(), at_nine.clone()).unwrap(), None);
+        db.resume_event_reminders(id.clone(), at_nine.clone())
+            .unwrap();
+        assert!(
+            db.reminder_now(key.clone(), at_nine.clone())
+                .unwrap()
+                .is_some()
+        );
+        // The range moved (as a sync could do): the old alarm no longer applies.
+        {
+            let guard = db.lock().unwrap();
+            let mut item = guard.get_item(&id).unwrap().unwrap();
+            item.end_date = NaiveDate::from_ymd_opt(2026, 12, 20);
+            guard.update_item(&mut item, Utc::now()).unwrap();
+        }
+        assert_eq!(db.reminder_now(key, at_nine.clone()).unwrap(), None);
+        // Nonsense keys are simply not planned.
+        assert_eq!(db.reminder_now("no key".into(), at_nine).unwrap(), None);
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn reminder_now_drops_completed_tasks_and_switched_off_reminders() {
+        let (db, path) = file_db("now-task");
+        db.set_reminders_enabled(true).unwrap();
+        let id = add_timesheet(&db, monday());
+        let key = format!("{id}|Due|2026-10-26T14:00");
+        // An alarm that went off late (3 PM) still shows its 2 PM reminder.
+        let late = "2026-10-26T15:00:00-05:00".to_string();
+        assert!(
+            db.reminder_now(key.clone(), late.clone())
+                .unwrap()
+                .is_some()
+        );
+        db.set_reminders_enabled(false).unwrap();
+        assert_eq!(db.reminder_now(key.clone(), late.clone()).unwrap(), None);
+        db.set_reminders_enabled(true).unwrap();
+        db.complete_task(id, MONDAY_ONE_PM.into()).unwrap();
+        assert_eq!(db.reminder_now(key, late).unwrap(), None);
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn the_demo_never_gives_a_reminder_and_tasks_cannot_be_stopped() {
+        let db = empty();
+        assert_eq!(
+            db.reminder_now("x|Due|2026-10-26T14:00".into(), MONDAY_ONE_PM.into())
+                .unwrap(),
+            None
+        );
+        let (db, path) = file_db("stop-task");
+        let id = add_timesheet(&db, monday());
+        assert!(db.stop_event_reminders(id, MONDAY_ONE_PM.into()).is_err());
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Dec 24 2026, noon Central.
+    const DEC_24_NOON: &str = "2026-12-24T12:00:00-06:00";
 
     #[test]
     fn deleted_missing_and_events_are_not_open_tasks() {
