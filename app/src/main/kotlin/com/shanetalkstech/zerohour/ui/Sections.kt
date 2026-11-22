@@ -47,7 +47,8 @@ import uniffi.zerohour_ffi.TaskRow
 // terminal app's main screen (tui/src/ui/list.rs in the zerohour repo):
 //
 //   Tasks:  marker  priority  title...  [date]  due   [priority name]
-//   Events: marker  title...  [date]  countdown  [repeat]
+//   Events: marker  [bell]  title...  [date]  countdown  [repeat]
+//   (running events come first, with "19 days left"; core sorts and words them)
 //
 // with one blank column between columns. The parts in [brackets] appear only
 // on wide screens, as in the terminal app. All texts and colour slots come
@@ -183,6 +184,10 @@ fun EventsBox(
             // never less than the longest countdown, so "today!" is not cut.
             val longest = events.maxOf { cellCount(it.countdown.text) }
             val countdownCells = maxOf(longest, if (narrow) 5 else 13)
+            // The daily-reminder bell gets its own column, only when some event
+            // has an end date, so a list without any looks as before (as in
+            // the terminal app). Its width is the widest mark shown.
+            val markCells = events.mapNotNull { it.mark }.maxOfOrNull { cellCount(it.text) }
 
             LazyColumn {
                 items(events, key = { it.id }) { event ->
@@ -193,6 +198,19 @@ fun EventsBox(
                         onSwipeLeft = { onDelete(event.id, event.title) },
                     ) {
                         CellText(look, eventIcon, sectionColor, markerCells)
+                        if (markCells != null) {
+                            // The bell (accent while the range runs, muted
+                            // before), the crossed-out bell when stopped, or a
+                            // blank that keeps the titles lined up.
+                            val mark = event.mark
+                            Gap(look)
+                            CellText(
+                                look,
+                                mark?.text.orEmpty(),
+                                look.color(mark?.slot ?: ColorSlot.MUTED),
+                                markCells,
+                            )
+                        }
                         Gap(look)
                         TitleText(look, event.title, look.color(ColorSlot.FOREGROUND))
                         if (showDates) {

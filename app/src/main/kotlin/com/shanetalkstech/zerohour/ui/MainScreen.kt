@@ -109,10 +109,12 @@ private sealed interface LoadState {
 private data class Status(val text: String, val slot: ColorSlot = ColorSlot.OK)
 
 /**
- * The add/edit form while it is open: the Rust-side [form] object, and
- * whether it was opened to add (start at "Task or Event?") or to edit.
+ * The add/edit form while it is open: the Rust-side [form] object, whether it
+ * was opened to add (start at "Task or Event?") or to edit, and the edited
+ * item's [editingId] (null when adding), for the edit screen's daily-reminder
+ * line.
  */
-private data class OpenForm(val form: ItemForm, val adding: Boolean)
+private data class OpenForm(val form: ItemForm, val adding: Boolean, val editingId: String? = null)
 
 /** A line swiped left, waiting for "delete" or "keep": its [id] and [title]. */
 private data class PendingDelete(val id: String, val title: String)
@@ -224,12 +226,12 @@ fun MainRoute() {
     }
 
     // Opens a form made by [make] (a new one, or one filled in from an item).
-    fun openFormWith(adding: Boolean, make: (Database) -> ItemForm) {
+    fun openFormWith(adding: Boolean, editingId: String? = null, make: (Database) -> ItemForm) {
         status = null
         scope.launch {
             try {
                 val form = withContext(Dispatchers.IO) { make(DatabaseHolder.get(context)) }
-                openForm = OpenForm(form, adding)
+                openForm = OpenForm(form, adding, editingId)
             } catch (e: FfiException) {
                 status = Status(e.explanation(), ColorSlot.DANGER)
                 reloads++
@@ -343,6 +345,7 @@ fun MainRoute() {
                         look = look,
                         form = form.form,
                         chooseKindFirst = form.adding,
+                        editingId = form.editingId,
                         taskIcon = s.screen.taskIcon,
                         eventIcon = s.screen.eventIcon,
                         // "+ add" on the Events tab suggests an event.
@@ -437,7 +440,7 @@ fun MainRoute() {
                             }
                         },
                         onAdd = { openFormWith(adding = true) { it.newForm() } },
-                        onEdit = { id -> openFormWith(adding = false) { it.editForm(id) } },
+                        onEdit = { id -> openFormWith(adding = false, editingId = id) { it.editForm(id) } },
                         onComplete = ::complete,
                         onDelete = { id, title ->
                             status = null

@@ -74,6 +74,12 @@
     <string name="keep_after_pass">show after the date passes</string>
     <!-- Under the date field: opens the month-grid picker. -->
     <string name="open_calendar">[ calendar ]</string>
+    <!-- The edit screen of an event with an end date: its daily reminders,
+         and a tap to stop them for the current range or resume them. -->
+    <string name="daily_on">Daily reminders: on</string>
+    <string name="daily_stopped">Daily reminders: stopped</string>
+    <string name="daily_stop">[ stop ]</string>
+    <string name="daily_resume">[ resume ]</string>
     <string name="save_button">[ save ]</string>
     <string name="cancel_button">[ cancel ]</string>
     <!-- The calendar picker. %1$s is the first weekday now, e.g. "Su". -->
