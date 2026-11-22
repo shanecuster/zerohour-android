@@ -12,7 +12,7 @@ composeBom = "2026.02.01"
 # Added for zerohour: coroutines (the app calls the blocking Rust library on a
 # background dispatcher -- zerohour's sync is blocking ureq, not async) and JNA
 # (how Kotlin loads and calls the Rust library).
-coroutines = "1.10.2"
+coroutines = "1.11.0"
 jna = "5.17.0"
 # Added for zerohour's reminders: JUnit 4 runs the plain-JVM unit tests in
 # app/src/test (the daylight-saving rule and the alarm request codes). It is
