@@ -1,0 +1,2 @@
+- Pull down at the top of the Tasks or Events list to sync now, as in other apps. It shows "syncing…" until it's done, then the result at the bottom.
+- With sync off, the pull says where to turn it on.
