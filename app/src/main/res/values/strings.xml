@@ -244,6 +244,24 @@
     <!-- Replaces a reminder's text when Done could not complete the task.
          %1$s is the reason, in core's words. -->
     <string name="reminder_done_failed">Couldn\'t mark it done: %1$s</string>
+    <!-- The buttons on an event's daily reminder (an event with an end
+         date). Core decides which ones show. "Stop reminders" on a one-off
+         event; "Stop for this year" on a repeating one; on the last day of a
+         repeating event's range also "Keep" and "Remove". -->
+    <string name="reminder_stop">Stop reminders</string>
+    <string name="reminder_stop_year">Stop for this year</string>
+    <string name="reminder_keep">Keep</string>
+    <string name="reminder_remove">Remove</string>
+    <!-- Remove's second step, in the same notification. %1$s is the event's
+         title. Removing deletes the event and can't be undone. -->
+    <string name="reminder_remove_title">Remove \"%1$s\" for good?</string>
+    <string name="reminder_remove_text">This can\'t be undone. With sync on, it\'s removed on every device.</string>
+    <string name="reminder_remove_yes">Yes, remove</string>
+    <string name="reminder_remove_cancel">Cancel</string>
+    <!-- Replaces the notification's text when a button could not do its
+         job. %1$s is the reason, in core's words. -->
+    <string name="reminder_stop_failed">Couldn\'t stop the reminders: %1$s</string>
+    <string name="reminder_remove_failed">Couldn\'t remove it: %1$s</string>
     <!-- The About page (Settings › About). The version line is built in
          code from the app name, the build's version name and code, and
          about_debug on debug builds: "zerohour 0.2.1 (4) debug". -->

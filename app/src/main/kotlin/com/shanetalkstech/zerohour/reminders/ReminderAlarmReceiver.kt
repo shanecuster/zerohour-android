@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.shanetalkstech.zerohour.data.DatabaseHolder
+import com.shanetalkstech.zerohour.data.nowText
 
 /**
  * Receives the app's own reminder alarms (set by [ReminderScheduler]).
@@ -27,25 +28,23 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Shows the reminder the alarm carries, after checking it still applies.
+     * Shows the reminder the alarm carries, if it still applies.
      *
-     * Alarms are cancelled when their reminder is no longer planned, so the
-     * checks here are a second guard: never on the demo database, never with
-     * reminders switched off, and never for a task that has been completed
-     * or deleted meanwhile (for example by a sync that came in after the
-     * alarm was set, or an alarm whose cancel was missed).
+     * Alarms are cancelled when their reminder is no longer planned, so this
+     * is a second guard: never on the demo database, and only if core would
+     * still plan the same reminder now (`reminderNow`). That drops a reminder
+     * whose task was completed or deleted, whose date or event range moved,
+     * whose event's reminders were stopped, or that was switched off,
+     * including by a sync that came in after the alarm was set. What is shown
+     * is core's current text and buttons, not the copy saved in the alarm.
      */
     private fun show(context: Context, intent: Intent) {
         val app = context.applicationContext
         val key = intent.getStringExtra(ReminderScheduler.EXTRA_KEY) ?: return
-        val title = intent.getStringExtra(ReminderScheduler.EXTRA_TITLE) ?: return
-        val body = intent.getStringExtra(ReminderScheduler.EXTRA_BODY) ?: ""
-        // Null for the digest, which is about several tasks.
-        val itemId = intent.getStringExtra(ReminderScheduler.EXTRA_ITEM_ID)
         if (DatabaseHolder.usesDemo(app)) return
         val db = DatabaseHolder.get(app)
-        if (!db.reminderSettings().enabled) return
-        if (itemId != null && !db.isOpenTask(itemId)) return
-        ReminderNotifications.show(app, key, itemId, title, body, ReminderNotifications.accentOf(db))
+        // `?: return`: nothing to show when core no longer plans it.
+        val reminder = db.reminderNow(key, nowText()) ?: return
+        ReminderNotifications.show(app, reminder, ReminderNotifications.accentOf(db))
     }
 }
