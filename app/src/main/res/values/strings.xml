@@ -211,6 +211,10 @@
         <item quantity="other">This phone has %1$d items. The first sync adds them to the server\'s; anything typed on both devices will appear twice.</item>
     </plurals>
     <string name="sync_already_running">Already syncing…</string>
+    <!-- The line at the top of the Tasks or Events list while it is pulled
+         down to sync (ui/PullToSync.kt); "syncing…" reuses sync_state_running. -->
+    <string name="pull_hint">↓ pull to sync</string>
+    <string name="pull_release">↑ release to sync</string>
     <!-- The header indicator's name for screen readers. -->
     <string name="sync_now_description">Sync now</string>
 
