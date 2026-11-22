@@ -1,13 +1,17 @@
 package com.shanetalkstech.zerohour.ui
 
+import androidx.compose.animation.core.animate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -28,10 +32,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -40,7 +48,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import com.shanetalkstech.zerohour.R
+import com.shanetalkstech.zerohour.data.FLICK_SPEED_DP
+import com.shanetalkstech.zerohour.data.SwipeOutcome
+import com.shanetalkstech.zerohour.data.swipeArmed
+import com.shanetalkstech.zerohour.data.swipeOutcome
 import kotlin.math.roundToInt
 import uniffi.zerohour_ffi.ColorSlot
 import uniffi.zerohour_ffi.EventRow
@@ -293,18 +306,67 @@ private enum class SwipeAnchor {
 }
 
 /**
- * How far a line must be dragged before letting go swipes it: 40% of its
- * width. Less springs back. A quick flick swipes it too, whatever the
- * distance (Compose's own rule for anchored drags).
+ * What happens when the finger lets go of a dragged line: it decides where
+ * the line goes with zerohour's rules ([swipeOutcome]: 60% of the width, or
+ * a fast flick past 30%), then slides it there.
+ *
+ * Why not Compose's own `AnchoredDraggableDefaults.flingBehavior`: it treats
+ * any flick faster than a fixed 125 dp/s as a swipe, whatever the distance,
+ * and that speed cannot be changed. That made accidental swipes easy.
+ *
+ * A [FlingBehavior] is Compose's hook for "the finger let go with this
+ * speed". `anchoredDraggable` calls [performFling] with the speed, inside a
+ * [ScrollScope] whose `scrollBy` moves the line by that many pixels. When
+ * the line ends exactly on a resting position, the state reports it as
+ * settled, which is what runs the swipe's action.
+ *
+ * @param state the line's drag state (its offset and resting positions).
+ * @param flickSpeed [FLICK_SPEED_DP] in pixels per second, for this screen.
  */
-private const val SWIPE_THRESHOLD = 0.4f
+private class SwipeFling(
+    private val state: AnchoredDraggableState<SwipeAnchor>,
+    private val flickSpeed: Float,
+) : FlingBehavior {
+    /**
+     * Picks the resting position and animates to it. Returns the speed left
+     * over, always 0: the line uses it all (nothing else should move).
+     * `suspend` lets it wait for the animation without blocking the screen.
+     */
+    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+        val offset = state.requireOffset()
+        // The COMPLETE position is the line's width (see `updateAnchors`).
+        val width = state.anchors.positionOf(SwipeAnchor.COMPLETE)
+        val target = when (swipeOutcome(offset, width, initialVelocity, flickSpeed)) {
+            SwipeOutcome.RIGHT -> SwipeAnchor.COMPLETE
+            SwipeOutcome.LEFT -> SwipeAnchor.DELETE
+            SwipeOutcome.REST -> SwipeAnchor.REST
+        }
+        val targetOffset = state.anchors.positionOf(target)
+        // Slide there on Compose's default spring, starting at the finger's
+        // speed so the line does not jerk. Each step moves the line to the
+        // animation's value: by the difference from where the line is now
+        // (not from the last step), because `scrollBy` stops the line at
+        // the outer positions and a step it could not take must not count.
+        animate(initialValue = offset, targetValue = targetOffset, initialVelocity = initialVelocity) { value, _ ->
+            scrollBy(value - state.requireOffset())
+        }
+        // Land exactly on the position (the state only settles within half
+        // a pixel of it), in case the animation stopped a fraction short.
+        scrollBy(targetOffset - state.requireOffset())
+        return 0f
+    }
+}
 
 /**
  * One list line: a row of cells, [LINE_ROWS] character rows tall, with its
  * contents centred vertically.
  *
  * Touch, as the plan sets out: one tap runs [onTap]; dragging the line to
- * the right and letting go runs [onSwipeRight], to the left [onSwipeLeft].
+ * the right and letting go runs [onSwipeRight], to the left [onSwipeLeft],
+ * if the swipe was deliberate enough ([swipeOutcome]: 60% of the width, or
+ * a fast flick past 30%); otherwise it springs back. While the finger is
+ * still down, the phone vibrates each time the line crosses the 60% point
+ * outwards, the moment from which letting go will act.
  * Either way the line then slides back into place (if the action removes it,
  * the next refresh does that). While it is dragged, the space it uncovers
  * says what letting go will do: "done" on the left in the "ok" colour,
@@ -312,7 +374,7 @@ private const val SWIPE_THRESHOLD = 0.4f
  *
  * The swipe uses Compose foundation's `AnchoredDraggable`: the line can rest
  * at one of three positions (the [SwipeAnchor]s), follows the finger in
- * between, and settles on the nearest sensible one when let go.
+ * between, and when let go slides to the one [SwipeFling] picks.
  * `RowScope.()` lets the contents use `Modifier.weight`, which [TitleText]
  * needs.
  */
@@ -325,6 +387,18 @@ private fun SwipeLine(
     content: @Composable RowScope.() -> Unit,
 ) {
     val state = remember { AnchoredDraggableState(initialValue = SwipeAnchor.REST) }
+    // The finger's speed for a flick, converted from dp to this screen's
+    // pixels, and the fling that applies zerohour's rules (see [SwipeFling]).
+    val flickSpeed = with(LocalDensity.current) { FLICK_SPEED_DP.dp.toPx() }
+    val fling = remember(state, flickSpeed) { SwipeFling(state, flickSpeed) }
+    // Tells whether a finger is dragging the line right now (as opposed to
+    // the line sliding on its own after being let go), so the vibration
+    // below only happens under the finger. `anchoredDraggable` reports its
+    // drags to this source; `collectIsDraggedAsState` turns them into a
+    // true/false value Compose watches.
+    val interactions = remember { MutableInteractionSource() }
+    val fingerDown by interactions.collectIsDraggedAsState()
+    val haptics = LocalHapticFeedback.current
 
     // When the line comes to rest off to one side, do that side's action and
     // slide it back. `settledValue` changes only once a drag has finished.
@@ -357,6 +431,17 @@ private fun SwipeLine(
         // How far the line is dragged right now (0 before the first layout).
         val dragged = if (state.offset.isNaN()) 0f else state.offset
 
+        // Vibrate once when a dragged line crosses the 60% point outwards.
+        // `armed` changes only at that point, so the effect below runs only
+        // when it is crossed (either way); it vibrates on the way out, and
+        // only while the finger is down, never as the line slides off.
+        val armed = swipeArmed(dragged, width)
+        LaunchedEffect(armed) {
+            if (armed && fingerDown) {
+                haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+            }
+        }
+
         // Underneath: what letting go will do.
         if (dragged > 0f) {
             SwipeHint(look, R.string.swipe_done, ColorSlot.OK, Alignment.CenterStart)
@@ -376,10 +461,8 @@ private fun SwipeLine(
                 .anchoredDraggable(
                     state = state,
                     orientation = Orientation.Horizontal,
-                    flingBehavior = AnchoredDraggableDefaults.flingBehavior(
-                        state = state,
-                        positionalThreshold = { distance -> distance * SWIPE_THRESHOLD },
-                    ),
+                    interactionSource = interactions,
+                    flingBehavior = fling,
                 )
                 .clickable(onClick = onTap),
             verticalAlignment = Alignment.CenterVertically,

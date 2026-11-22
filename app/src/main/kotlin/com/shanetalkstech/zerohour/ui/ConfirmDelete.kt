@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
@@ -27,9 +28,14 @@ internal const val CONFIRM_BOX_CELLS = 50
  * ╭ Delete? ───────────────────────╮
  * │ Delete "Pay electricity bill"? │
  * │                                │
- * │ [ delete ]   [ keep ]          │
+ * │ [ keep ]             [ delete ] │
  * ╰────────────────────────────────╯
  * ```
+ *
+ * "keep" is on the left, where a left swipe's thumb ends up, and "delete"
+ * at the far right, so a quick tap straight after the swipe keeps the item
+ * instead of deleting it. (The terminal app's box, answered with keys, has
+ * them the other way round.)
  *
  * The border and "delete" are in the danger colour, "keep" in the accent
  * colour. [columns] is the screen's width in cells (the box never gets wider
@@ -63,10 +69,15 @@ fun ConfirmDeleteBox(
                 style = look.text.copy(color = look.color(ColorSlot.FOREGROUND)),
             )
             Spacer(Modifier.height(look.cell.rows(1)))
-            Row {
-                TapText(look, stringResource(R.string.delete_yes), danger, onClick = onDelete, bold = true)
-                Spacer(Modifier.width(look.cell.columns(3)))
+            // The Row spans the box. The first Spacer keeps the buttons at
+            // least three cells apart on a narrow screen; the second, with
+            // `weight(1f)`, takes all the width that is left, pushing
+            // "delete" to the right edge.
+            Row(modifier = Modifier.fillMaxWidth()) {
                 TapText(look, stringResource(R.string.delete_no), look.color(ColorSlot.ACCENT), onClick = onKeep, bold = true)
+                Spacer(Modifier.width(look.cell.columns(3)))
+                Spacer(Modifier.weight(1f))
+                TapText(look, stringResource(R.string.delete_yes), danger, onClick = onDelete, bold = true)
             }
         }
     }
