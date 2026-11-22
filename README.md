@@ -44,10 +44,27 @@ Android alarms and notifications; nothing about them leaves the phone.
   while it stays open, so a missed Monday 2 PM still reminds on Tuesday at
   2 PM; a task due on a day without a time, at **Day time** (09:00) that day;
   and, if **Digest** is on, a daily list of overdue tasks at Day time (a
-  task is overdue once its due day is over, not when its due time passes).
-  Never events, completed or deleted tasks, or anything on the demo database.
-- **Done** on a notification completes the task like a swipe (a repeating
-  task gets its next instance). The digest has no Done.
+  task is overdue once its due day is over, not when its due time passes);
+  and an **event with an end date** (Advent of Cyber, Dec 1 to Dec 24 every
+  year), at Day time on every day of its range ("Day 5 of 24 · 19 days
+  left" … "Last day"). Never events without an end date, completed or
+  deleted tasks, a repeating task past its **Until** date, or anything on the
+  demo database.
+- **Buttons** (core decides which): **Done** on a task's reminder completes it
+  like a swipe (a repeating task gets its next instance). On an event's daily
+  reminder, **Stop reminders** (one-off) or **Stop for this year**
+  (repeating) stops them for the current range; next year's range reminds
+  again by itself. On the last day of a repeating event's range, also
+  **Keep** (nothing changes) and **Remove**, which asks "Remove … for good?"
+  in the same notification: **Yes, remove** deletes the event (it can't be
+  undone, and with sync on it is removed on every device), **Cancel** shows
+  the reminder again. The digest has no buttons. Stopped reminders can be
+  resumed on the event's edit screen ("Daily reminders: stopped [ resume ]").
+- **A second check when an alarm goes off:** the app shows a reminder only if
+  core would still plan it now, so one whose task was completed, whose date or
+  range moved, or whose event was stopped or deleted (here or by a sync since
+  the alarm was set) is dropped. A "Due today" or "Day 5 of 24" reminder whose
+  day is over is dropped too.
 - **Exact or late:** with *Alarms & reminders* allowed for the app (off by
   default on Android 14 and later), reminders come at the minute. Without it
   they use inexact alarms, which Android may deliver up to about an hour
@@ -74,6 +91,30 @@ adb shell dumpsys alarm | grep -B1 -A4 com.shanetalkstech.zerohour
 Each reminder shows as `REMINDER_FIRE` with its time (`origWhen`), plus one
 `REMINDER_REFILL` about a day ahead. Add `-s <serial>` after `adb` when more
 than one device is connected (`adb devices` lists them).
+
+## Updating and the database
+
+An update whose core adds a migration (0.4.0 goes from schema 4 to 6) applies
+it the first time the app opens its database. Each step runs in a
+transaction: it finishes, or nothing changes. Settings → About shows
+"database schema 6" afterwards. If the database can't be opened, the app
+says so on its own screen with only **try again**; nothing there deletes or
+resets anything.
+
+Back up first where you can. A **debug** build can be copied with adb
+(stop the app first so nothing is half-written):
+
+```bash
+adb shell am force-stop com.shanetalkstech.zerohour.debug
+adb exec-out run-as com.shanetalkstech.zerohour.debug cat databases/zerohour.db > zerohour-phone-backup.db
+sqlite3 zerohour-phone-backup.db "PRAGMA integrity_check; SELECT max(version) FROM schema_migrations;"
+```
+
+A **release** build (Google Play, or a signed sideload) can't be copied this
+way: it is not debuggable, and the app keeps its data out of Android's backups
+on purpose. Its only copy elsewhere is your sync server, if sync is set up:
+sync just before updating (tasks, events, notes and completions are on the
+server; the phone's own settings are not).
 
 ## About
 
@@ -177,6 +218,8 @@ its name) also makes `armeabi-v7a`. Override with
    `scripts/check-release-apk.sh` (see "Checking a release APK" below), which
    covers the `arm64-v8a`, `armeabi-v7a` and `x86_64` libraries, and the 16 KB
    page alignment Google Play requires for updates from 1 February 2027.
+   When core's pin brings a migration, check the About page's "database
+   schema N" line on an updated install.
 4. **About page:** the Privacy policy row opens `PRIVACY.md` on `master`
    (`PRIVACY_POLICY_URL` in
    `app/src/main/kotlin/com/shanetalkstech/zerohour/about/AboutLinks.kt`), so
