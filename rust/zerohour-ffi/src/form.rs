@@ -95,6 +95,9 @@ pub enum FormField {
     EveryUnit,
     /// Checkbox (one-off events only): keep showing after the date passes.
     KeepAfterPass,
+    /// Free text: the end date as typed ("12/24", "+23"), counted from the
+    /// start. "Ends on" on events, "Until" on repeating tasks; empty = no end.
+    EndDate,
     /// Free text: notes.
     Notes,
 }
@@ -116,6 +119,7 @@ impl From<Field> for FormField {
             Field::EveryN => FormField::EveryN,
             Field::EveryUnit => FormField::EveryUnit,
             Field::KeepAfterPass => FormField::KeepAfterPass,
+            Field::EndDate => FormField::EndDate,
             Field::Notes => FormField::Notes,
         }
     }
@@ -139,6 +143,7 @@ impl From<FormField> for Field {
             FormField::EveryN => Field::EveryN,
             FormField::EveryUnit => Field::EveryUnit,
             FormField::KeepAfterPass => Field::KeepAfterPass,
+            FormField::EndDate => Field::EndDate,
             FormField::Notes => Field::Notes,
         }
     }
@@ -338,6 +343,7 @@ impl ItemForm {
             FormField::EveryN => {
                 input.every_n = text.chars().filter(char::is_ascii_digit).collect()
             }
+            FormField::EndDate => input.end_text = text,
             FormField::Notes => input.notes = text,
             _ => {}
         }

@@ -73,6 +73,9 @@ pub enum ReminderKind {
     DayOf,
     /// The once-a-day list of overdue tasks (not about one task, so no Done).
     Digest,
+    /// At the day time on each day of an event's range (an event with an end
+    /// date, such as Dec 1 to Dec 24).
+    Daily,
 }
 
 /// Converts core's reminder kind into the mirror.
@@ -84,6 +87,7 @@ impl From<CoreReminderKind> for ReminderKind {
             CoreReminderKind::Lead => ReminderKind::Lead,
             CoreReminderKind::DayOf => ReminderKind::DayOf,
             CoreReminderKind::Digest => ReminderKind::Digest,
+            CoreReminderKind::Daily => ReminderKind::Daily,
         }
     }
 }

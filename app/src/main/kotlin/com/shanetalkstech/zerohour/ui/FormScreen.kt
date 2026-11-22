@@ -458,7 +458,8 @@ private fun FieldLine(
         ) {
             BasicText(text = marker + row.label.padEnd(LABEL_CELLS) + " ", style = labelStyle)
             when (row.field) {
-                FormField.TITLE, FormField.DATE, FormField.TIME, FormField.EVERY_N, FormField.NOTES ->
+                FormField.TITLE, FormField.DATE, FormField.TIME, FormField.EVERY_N,
+                FormField.END_DATE, FormField.NOTES ->
                     TextInput(look, row.field, row.value, isFocused, onFocus, onText, Modifier.weight(1f))
 
                 FormField.PRIORITY, FormField.REPEAT, FormField.EVERY_UNIT,
