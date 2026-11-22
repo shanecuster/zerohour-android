@@ -8,7 +8,7 @@ agp = "9.5.2"
 coreKtx = "1.10.1"
 activityCompose = "1.8.0"
 kotlin = "2.2.21"
-composeBom = "2026.11.01"
+composeBom = "2026.02.01"
 # Added for zerohour: coroutines (the app calls the blocking Rust library on a
 # background dispatcher -- zerohour's sync is blocking ureq, not async) and JNA
 # (how Kotlin loads and calls the Rust library).
