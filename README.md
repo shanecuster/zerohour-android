@@ -15,8 +15,17 @@ app and pinned to one commit.
 
 ## Gestures
 
-- **Swipe right** on a task: done. **Swipe left**: delete (it asks first).
-  **Tap**: edit.
+- **Swipe right** on a task: done. **Swipe left**: delete (it asks first;
+  **[ keep ]** is on the left, where the swipe ends, **[ delete ]** on the
+  right). **Tap**: edit. A swipe acts once the line is dragged past 60% of
+  the screen width (the phone vibrates at that point), or flicked fast after
+  30%; anything less springs back.
+- **Undo:** after a Done or a delete, the bottom row ends in **[ undo ]**
+  for 6 seconds. Tapping it reopens the task (a repeating task's next
+  instance and its stats entry go again) or brings the item back. It goes
+  sooner when another message replaces it, a sync starts, or the app goes to
+  the background, and once the change has synced it can't be undone ("Already
+  synced: can't undo").
 - **Pull down** at the top of the Tasks or Events list and let go when it
   says "release to sync": sync now (the phone vibrates once at that point).
   It shows "syncing…" until it's done, and the result in the bottom row. With

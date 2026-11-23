@@ -1,0 +1,2 @@
+- Undo for Done and Delete: tap [ undo ] in the bottom row within a few seconds.
+- Swipes need a longer, more deliberate move, and the phone vibrates when letting go will act.

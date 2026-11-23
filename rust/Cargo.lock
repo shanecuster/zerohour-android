@@ -1373,7 +1373,7 @@ dependencies = [
 [[package]]
 name = "zerohour-core"
 version = "0.1.0"
-source = "git+https://github.com/shanecuster/zerohour?rev=b86f3d32b7483402a161a4b81baf56b3bde00575#b86f3d32b7483402a161a4b81baf56b3bde00575"
+source = "git+https://github.com/shanecuster/zerohour?rev=0e477a1abb13bc40fe1e2c5bb4e75c9a8a07ac5f#0e477a1abb13bc40fe1e2c5bb4e75c9a8a07ac5f"
 dependencies = [
  "chrono",
  "directories",

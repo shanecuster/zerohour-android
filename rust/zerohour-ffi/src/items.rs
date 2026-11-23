@@ -7,13 +7,14 @@
 //! using core for the work: `FormInput::from_item` to fill an edit form,
 //! `FormInput::validate` to check it, `FormData::apply_to` to copy it onto an
 //! item, `Db::insert_item` / `Db::update_item` to store it, and
-//! `Db::complete_task` / `Db::delete_item` for the swipes.
+//! `Db::complete_task` / `Db::delete_item` for the swipes, and
+//! `Db::undo_complete` / `Db::undo_delete` for the bottom row's `[ undo ]`.
 
 use std::sync::Arc;
 
 use zerohour_core::calendar::WeekStart as CoreWeekStart;
 use zerohour_core::clock::format_time;
-use zerohour_core::db::{Db, settings_keys};
+use zerohour_core::db::{Db, DbError, UndoOutcome as CoreUndoOutcome, settings_keys};
 use zerohour_core::form::FormInput;
 use zerohour_core::model::{Item, Kind};
 
@@ -61,6 +62,44 @@ pub enum CompleteOutcome {
         /// words). `None` for a one-off task.
         next_due: Option<String>,
     },
+}
+
+/// What happened when the user tapped `[ undo ]` after a Done or a delete.
+///
+/// Undo works only while the change is still on this phone (see core's
+/// `Db::undo_delete` and `Db::undo_complete`): once it has synced, the next
+/// sync would bring the change straight back, so core refuses instead. Only
+/// `Undone` changed anything; the other three leave the database as it was.
+/// Variants without fields become a plain Kotlin `enum class`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum UndoOutcome {
+    /// Taken back: the task is open again, or the item is back in its list.
+    Undone,
+    /// The change already reached the sync server (or came from another
+    /// device), so it can no longer be taken back.
+    AlreadySynced,
+    /// The item changed after the Done or delete (for example the next
+    /// instance of a repeating task was edited), so there is nothing to undo.
+    ChangedSince,
+    /// No item has that id. Should not happen from the app, which only
+    /// offers undo for an item it just changed.
+    NotFound,
+}
+
+/// Turns core's answer, or core's "no such item" error, into [`UndoOutcome`].
+///
+/// `Result<CoreUndoOutcome, DbError>` is matched as a whole: `Ok(...)` holds
+/// core's answer, `Err(DbError::NotFound(_))` the unknown id (the `_` ignores
+/// the id inside it), and any other error (a database failure) is passed on
+/// to Kotlin as an exception through `?`'s conversion into `FfiError`.
+fn undo_outcome(result: Result<CoreUndoOutcome, DbError>) -> Result<UndoOutcome, FfiError> {
+    match result {
+        Ok(CoreUndoOutcome::Undone) => Ok(UndoOutcome::Undone),
+        Ok(CoreUndoOutcome::AlreadySynced) => Ok(UndoOutcome::AlreadySynced),
+        Ok(CoreUndoOutcome::ChangedSince) => Ok(UndoOutcome::ChangedSince),
+        Err(DbError::NotFound(_)) => Ok(UndoOutcome::NotFound),
+        Err(error) => Err(error.into()),
+    }
 }
 
 /// Reads the saved first day of the week (Sunday if nothing is saved).
@@ -196,6 +235,26 @@ impl Database {
         let now = parse_now(&now)?;
         self.lock()?.delete_item(&id, now.utc)?;
         Ok(())
+    }
+
+    /// Takes back the delete of the item with this `id`, as the terminal
+    /// app's `u` key does: the item comes back as a newer edit, which a later
+    /// sync passes on like any other. Refused once the delete has synced.
+    pub fn undo_delete(&self, id: String, now: String) -> Result<UndoOutcome, FfiError> {
+        let now = parse_now(&now)?;
+        undo_outcome(self.lock()?.undo_delete(&id, now.utc))
+    }
+
+    /// Takes back the Done of the task with this `id`, as the terminal app's
+    /// `u` key does: the task is open again, its entry in the stats log is
+    /// removed, and so is the next instance a repeating task got (if it was
+    /// not touched since), all in one transaction. Refused once any of that
+    /// has synced.
+    pub fn undo_complete(&self, id: String, now: String) -> Result<UndoOutcome, FfiError> {
+        let now = parse_now(&now)?;
+        // `mut`: core's `undo_complete` needs `&mut Db` for its transaction.
+        let mut db = self.lock()?;
+        undo_outcome(db.undo_complete(&id, now.utc))
     }
 }
 
@@ -406,4 +465,65 @@ mod tests {
         assert!(db.delete_item(id.clone(), NOW.into()).is_err());
         assert!(db.complete_task(id, NOW.into()).is_err());
     }
+
+    #[test]
+    fn undo_brings_a_deleted_item_back() {
+        let db = empty();
+        let id = add(&db, ItemKind::Task, "Call mum", "today", 0);
+        db.delete_item(id.clone(), NOW.into()).unwrap();
+        assert_eq!(
+            db.undo_delete(id.clone(), NOW.into()).unwrap(),
+            UndoOutcome::Undone
+        );
+        let items = db.lock().unwrap().list_items().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Call mum");
+        // A second undo finds nothing deleted: nothing changes.
+        assert_eq!(
+            db.undo_delete(id, NOW.into()).unwrap(),
+            UndoOutcome::ChangedSince
+        );
+    }
+
+    #[test]
+    fn undo_reopens_a_daily_task_and_removes_the_next_one() {
+        let db = empty();
+        let id = add(&db, ItemKind::Task, "Stretch", "today", 1);
+        db.complete_task(id.clone(), NOW.into()).unwrap();
+        assert_eq!(db.lock().unwrap().list_items().unwrap().len(), 2);
+        assert_eq!(
+            db.undo_complete(id.clone(), NOW.into()).unwrap(),
+            UndoOutcome::Undone
+        );
+        let core = db.lock().unwrap();
+        let items = core.list_items().unwrap();
+        // Only the original is left, open again, and the stats log is empty.
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, id);
+        assert!(!items[0].is_completed());
+        assert!(core.list_completions().unwrap().is_empty());
+    }
+
+    #[test]
+    fn undo_of_an_unknown_or_untouched_item() {
+        let db = empty();
+        assert_eq!(
+            db.undo_delete("no such id".into(), NOW.into()).unwrap(),
+            UndoOutcome::NotFound
+        );
+        assert_eq!(
+            db.undo_complete("no such id".into(), NOW.into()).unwrap(),
+            UndoOutcome::NotFound
+        );
+        // An open task has no Done to take back.
+        let id = add(&db, ItemKind::Task, "Call mum", "today", 0);
+        assert_eq!(
+            db.undo_complete(id, NOW.into()).unwrap(),
+            UndoOutcome::ChangedSince
+        );
+    }
+
+    // The refusal once a change has synced (`UndoOutcome::AlreadySynced`)
+    // is tested in core (`db.rs` and `sync/engine.rs`), against its fake
+    // server; this crate only passes core's answer through `undo_outcome`.
 }
